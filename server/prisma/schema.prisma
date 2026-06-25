@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id              Int      @id @default(autoincrement())
+  email           String   @unique
+  username        String
+  password        String
+  role            String   @default("customer") // "customer" or "admin"
+  phone           String?
+  address         String?
+  isActive        Boolean  @default(true)
+  receiveWhatsApp Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  
+  orders          Order[]
+  customOrders    CustomOrder[]
+}
+
+model Order {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  items          String   // JSON string of items
+  totalAmount    Float
+  status         String   @default("pending") // pending, paid, shipped, delivered, rejected
+  receiptUrl     String?
+  receiptText    String?
+  bankId         Int?
+  invoicePrinted Boolean  @default(false)
+  invoiceNumber  String?
+  createdAt      DateTime @default(now())
+
+  user           User         @relation(fields: [userId], references: [id])
+  bank           BankAccount? @relation(fields: [bankId], references: [id])
+}
+
+model CustomOrder {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  material      String
+  details       String
+  attachmentUrl String?
+  attachmentText String?
+  status        String   @default("pending") // pending, priced, accepted, rejected
+  priceQuote    Float?
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id])
+}
+
+model ShippingMethod {
+  id            Int      @id @default(autoincrement())
+  name          String
+  price         Float
+  estimatedDays String
+  logoUrl       String?
+}
+
+model BankAccount {
+  id            Int      @id @default(autoincrement())
+  bankName      String
+  accountName   String
+  accountNumber String
+  iban          String
+  logoUrl       String?
+  
+  orders        Order[]
+}
+
+model Product {
+  id            Int      @id @default(autoincrement())
+  nameAr        String
+  nameEn        String
+  price         Float
+  image         String?
+  descriptionAr String
+  descriptionEn String
+  category      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Material {
+  id        Int      @id @default(autoincrement())
+  nameAr    String
+  nameEn    String
+  createdAt DateTime @default(now())
+}
+
+model StoreSettings {
+  id             Int      @id @default(autoincrement())
+  whatsappNumber String?
+  whatsappToken  String?
+  snapchatUrl    String?
+  instagramUrl   String?
+  updatedAt      DateTime @updatedAt
+}

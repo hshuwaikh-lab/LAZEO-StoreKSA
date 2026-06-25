@@ -1,0 +1,3 @@
+@echo off
+echo Starting LAZEO StoreKSA Backend and Frontend...
+npm start
