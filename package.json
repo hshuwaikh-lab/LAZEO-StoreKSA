@@ -2,7 +2,7 @@
   "name": "web-lazeo-storeksa",
   "private": true,
   "version": "0.0.0",
-  "homepage": "https://hshuwaith-lab.github.io/LAZEO-StoreKSA/",
+  "homepage": "https://hshuwaikh-lab.github.io/LAZEO-StoreKSA/",
   "type": "module",
   "scripts": {
     "dev": "vite",
