@@ -30,6 +30,14 @@
   max-width: 800px;
 }
 
+.hero-logo {
+  display: block;
+  max-width: 320px;
+  height: auto;
+  width: 100%;
+  margin: 0 auto 25px;
+}
+
 .hero-title {
   font-size: 4.5rem;
   color: var(--accent-main);

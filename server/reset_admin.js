@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   const email = 'admin@lazeo.com';
-  const newPassword = 'admin123';
+  const newPassword = 'admin270021';
   const hashedPassword = await bcrypt.hash(newPassword, 10);
   
   const updatedUser = await prisma.user.update({

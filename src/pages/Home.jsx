@@ -45,7 +45,7 @@ const Home = () => {
           <img 
             src="/logo.png" 
             alt="LAZEO StoreKSA" 
-            style={{height: '300px', width: 'auto', objectFit: 'contain', marginBottom: '10px'}} 
+            className="hero-logo"
           />
           <h1 className="hero-title" style={{display: 'none'}}>{t('hero_title')}</h1>
           <p className="hero-subtitle" style={{marginTop: '20px'}}>{t('hero_subtitle')}</p>

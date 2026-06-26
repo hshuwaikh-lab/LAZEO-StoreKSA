@@ -32,10 +32,10 @@ function App() {
           <ScrollToTop />
           <Layout>
             <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/shop" element={<Shop />} />
-            <Route path="/custom-order" element={<CustomOrder />} />
-            <Route path="/product/:id" element={<ProductDetails />} />
+              <Route path="/" element={<Home />} />
+              <Route path="/shop" element={<Shop />} />
+              <Route path="/custom-order" element={<CustomOrder />} />
+              <Route path="/product/:id" element={<ProductDetails />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/login" element={<Login />} />
               <Route path="/profile" element={

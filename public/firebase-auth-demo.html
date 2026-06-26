@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>Firebase Auth Demo</title>
+  <style>
+    body { font-family: sans-serif; max-width: 520px; margin: 40px auto; padding: 0 20px; direction: rtl; }
+    h2 { margin-top: 30px; }
+    input { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; }
+    button { padding: 10px 16px; cursor: pointer; }
+    p { min-height: 24px; }
+  </style>
+</head>
+<body>
+
+  <h2>تسجيل جديد</h2>
+  <input id="regEmail" type="email" placeholder="البريد">
+  <input id="regPass" type="password" placeholder="كلمة المرور">
+  <button id="registerBtn">تسجيل</button>
+  <p id="regMsg"></p>
+
+  <hr>
+
+  <h2>تسجيل الدخول</h2>
+  <input id="logEmail" type="email" placeholder="البريد">
+  <input id="logPass" type="password" placeholder="كلمة المرور">
+  <button id="loginBtn">دخول</button>
+  <p id="logMsg"></p>
+
+  <script type="module">
+    import { registerUser, loginUser } from "./auth.js";
+
+    document.getElementById("registerBtn").onclick = async () => {
+      const email = document.getElementById("regEmail").value;
+      const pass  = document.getElementById("regPass").value;
+
+      const result = await registerUser(email, pass);
+
+      if (result.success) {
+        document.getElementById("regMsg").innerText = "✔️ تم إنشاء الحساب بنجاح";
+      } else {
+        document.getElementById("regMsg").innerText = "❌ خطأ: " + result.error;
+      }
+    };
+
+    document.getElementById("loginBtn").onclick = async () => {
+      const email = document.getElementById("logEmail").value;
+      const pass  = document.getElementById("logPass").value;
+
+      const result = await loginUser(email, pass);
+
+      if (result.success) {
+        document.getElementById("logMsg").innerText = "✔️ تم تسجيل الدخول";
+      } else {
+        document.getElementById("logMsg").innerText = "❌ خطأ: " + result.error;
+      }
+    };
+  </script>
+
+</body>
+</html>

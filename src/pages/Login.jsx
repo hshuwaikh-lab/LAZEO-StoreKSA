@@ -9,8 +9,9 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [error, setError] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
   
-  const { login, register } = useContext(AuthContext);
+  const { login, register, loginWithGoogle, loginWithApple } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from || '/';
@@ -33,7 +34,7 @@ const Login = () => {
         }
       }
     } catch (err) {
-      setError(err.message);
+      setError(err?.message || err || 'حدث خطأ غير معروف');
     }
   };
 
@@ -55,6 +56,23 @@ const Login = () => {
       }
     } catch (err) {
       alert('حدث خطأ أثناء الاتصال بالخادم');
+    }
+  };
+
+  const handleSocialLogin = async (provider) => {
+    setError(null);
+    try {
+      const user = provider === 'google'
+        ? await loginWithGoogle()
+        : await loginWithApple();
+
+      if (user?.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate(from);
+      }
+    } catch (err) {
+      setError(err?.message || err || 'حدث خطأ أثناء تسجيل الدخول الاجتماعي');
     }
   };
 
@@ -88,14 +106,24 @@ const Login = () => {
             />
           </div>
           
-          <div className="input-group">
+          <div className="input-group password-group">
             <label>كلمة المرور</label>
-            <input 
-              type="password" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              required 
-            />
+            <div className="password-field">
+              <input 
+                type={showPassword ? 'text' : 'password'} 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                required 
+              />
+              <button
+                type="button"
+                className="password-toggle-btn"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'إخفاء كلمة المرور' : 'عرض كلمة المرور'}
+              >
+                {showPassword ? '🙈' : '👁️'}
+              </button>
+            </div>
           </div>
 
           {!isRegistering && (
@@ -113,9 +141,14 @@ const Login = () => {
 
         <div className="divider">أو</div>
 
-        <button className="btn-outline google-btn w-full" onClick={() => alert('محاكاة: تسجيل الدخول باستخدام Google')}>
+        <button className="btn-outline google-btn w-full" type="button" onClick={() => handleSocialLogin('google')}>
           <img src="https://img.icons8.com/color/24/000000/google-logo.png" alt="Google" />
-          {isRegistering ? 'التسجيل باستخدام حساب Google' : 'الدخول باستخدام حساب Google'}
+          الدخول / التسجيل باستخدام Google
+        </button>
+
+        <button className="btn-outline apple-btn w-full" type="button" onClick={() => handleSocialLogin('apple')}>
+          <img src="https://img.icons8.com/ios-filled/24/000000/apple-logo.png" alt="Apple" />
+          الدخول / التسجيل باستخدام Apple
         </button>
 
         <div className="toggle-register">

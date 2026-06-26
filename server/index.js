@@ -32,6 +32,37 @@ const upload = multer({ storage });
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+async function ensureAdminUser() {
+  const adminEmail = 'admin@lazeo.com';
+  const adminUsername = 'Admin Lazeo';
+  const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+
+  try {
+    const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
+    if (!existingAdmin) {
+      const hashedPassword = await bcrypt.hash(adminPassword, 10);
+      await prisma.user.create({
+        data: {
+          username: adminUsername,
+          email: adminEmail,
+          password: hashedPassword,
+          role: 'admin',
+          isActive: true
+        }
+      });
+      console.log(`Admin account created: ${adminEmail}`);
+    } else if (existingAdmin.role !== 'admin' || !existingAdmin.isActive) {
+      await prisma.user.update({
+        where: { email: adminEmail },
+        data: { role: 'admin', isActive: true }
+      });
+      console.log(`Admin account updated for: ${adminEmail}`);
+    }
+  } catch (error) {
+    console.error('Error ensuring admin user exists:', error);
+  }
+}
+
 // Register Endpoint
 app.post('/api/auth/register', async (req, res) => {
   const { username, email, password, role, receiveWhatsApp } = req.body;
@@ -84,6 +115,48 @@ app.post('/api/auth/login', async (req, res) => {
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
       return res.status(400).json({ error: 'بيانات الدخول غير صحيحة' });
+    }
+
+    const token = jwt.sign({ id: user.id, role: user.role, username: user.username }, SECRET_KEY, { expiresIn: '1d' });
+    res.json({ message: 'تم تسجيل الدخول بنجاح', token, user: { id: user.id, username: user.username, role: user.role, email: user.email } });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'حدث خطأ في السيرفر' });
+  }
+});
+
+// Social Login Endpoint
+app.post('/api/auth/social-login', async (req, res) => {
+  const { provider, providerId, email, username } = req.body;
+  if (!provider || !providerId || !email) {
+    return res.status(400).json({ error: 'بيانات تسجيل الدخول الاجتماعي غير مكتملة' });
+  }
+
+  try {
+    let user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      const randomPassword = Math.random().toString(36).slice(-16);
+      const hashedPassword = await bcrypt.hash(randomPassword, 10);
+      user = await prisma.user.create({
+        data: {
+          username: username || email.split('@')[0],
+          email,
+          password: hashedPassword,
+          role: 'customer',
+          provider,
+          providerId,
+          isActive: true
+        }
+      });
+    } else if (!user.provider || !user.providerId) {
+      await prisma.user.update({
+        where: { email },
+        data: { provider, providerId }
+      });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ error: 'الحساب غير مفعل. يرجى التواصل مع الإدارة.' });
     }
 
     const token = jwt.sign({ id: user.id, role: user.role, username: user.username }, SECRET_KEY, { expiresIn: '1d' });
@@ -607,6 +680,11 @@ app.put('/api/admin/settings', authenticateToken, requireAdmin, async (req, res)
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+ensureAdminUser().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+  });
+}).catch((err) => {
+  console.error('Failed to initialize server:', err);
+  process.exit(1);
 });

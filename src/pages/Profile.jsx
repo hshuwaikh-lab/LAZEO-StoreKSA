@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import InvoiceTemplate from '../components/InvoiceTemplate';
+import { AuthContext } from '../context/AuthContext';
 
 const Profile = () => {
   const { t } = useTranslation();
@@ -15,6 +16,7 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [printingOrder, setPrintingOrder] = useState(null);
   const invoiceRef = useRef(null);
+  const { updateUser } = useContext(AuthContext);
 
   useEffect(() => {
     fetchData();
@@ -58,6 +60,9 @@ const Profile = () => {
       });
       if (res.ok) {
         alert('تم تحديث البيانات بنجاح');
+        if (updateUser) {
+          updateUser({ username: profile.username });
+        }
       }
     } catch (error) {
       console.error('Error updating profile:', error);

@@ -21,7 +21,6 @@ const Navbar = () => {
 
   const navLinks = [
     { path: '/', label: t('home') },
-    { path: '/shop', label: t('shop') },
     { path: '/custom-order', label: t('custom_order') }
   ];
 

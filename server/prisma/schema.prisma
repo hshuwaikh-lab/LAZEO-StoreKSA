@@ -17,6 +17,8 @@ model User {
   address         String?
   isActive        Boolean  @default(true)
   receiveWhatsApp Boolean  @default(true)
+  provider        String?
+  providerId      String?
   createdAt       DateTime @default(now())
   
   orders          Order[]
