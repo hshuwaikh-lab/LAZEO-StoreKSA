@@ -5,6 +5,7 @@ import { Menu, X, ShoppingCart, Globe, User } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
 import { useContext } from 'react';
+import logo from '/logo.png';
 import './Navbar.css';
 
 const Navbar = () => {
@@ -21,6 +22,7 @@ const Navbar = () => {
 
   const navLinks = [
     { path: '/', label: t('home') },
+    { path: '/shop', label: t('shop') },
     { path: '/custom-order', label: t('custom_order') }
   ];
 
@@ -30,12 +32,12 @@ const Navbar = () => {
         {/* Logo */}
         <Link to="/" className="brand-logo">
           <img 
-             src="/logo.png" 
+             src={logo} 
              alt="LAZEO Logo" 
              style={{height: '90px', width: 'auto', objectFit: 'contain'}} 
              onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} 
           />
-          <h2 style={{display: 'none'}}>LAZEO <span>StoreKSA</span></h2>
+          <h2>LAZEO <span>StoreKSA</span></h2>
         </Link>
 
         {/* Desktop Nav */}

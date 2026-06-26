@@ -6,7 +6,7 @@ const resources = {
   ar: {
     translation: {
       "home": "الرئيسية",
-      "shop": "المتجر",
+      "shop": "تسوق",
       "custom_order": "طلب مخصص",
       "cart": "السلة",
       "hero_title": "أناقة الحفر الفاخر",

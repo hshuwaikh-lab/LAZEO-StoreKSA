@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import logo from '/logo.png';
 import './Home.css';
 
 const Home = () => {
@@ -43,7 +44,7 @@ const Home = () => {
         <div className="hero-overlay"></div>
         <div className="container hero-content">
           <img 
-            src="/logo.png" 
+            src={logo} 
             alt="LAZEO StoreKSA" 
             className="hero-logo"
           />
