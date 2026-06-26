@@ -62,16 +62,22 @@ export const AuthProvider = ({ children }) => {
       }
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (!firebaseUser) {
-        setUser(null);
-        setToken(null);
-        clearAuthState();
-      }
-      setLoading(false);
-    });
+    // Only set up auth listener if auth is available
+    if (auth) {
+      const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+        if (!firebaseUser) {
+          setUser(null);
+          setToken(null);
+          clearAuthState();
+        }
+        setLoading(false);
+      });
 
-    return unsubscribe;
+      return unsubscribe;
+    } else {
+      // If Firebase is not available, just mark loading as false
+      setLoading(false);
+    }
   }, []);
 
   const login = async (email, password) => {

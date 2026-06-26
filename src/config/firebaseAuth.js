@@ -8,6 +8,9 @@ import {
 } from 'firebase/auth';
 
 export async function registerUser(email, password) {
+  if (!auth) {
+    return { success: false, error: 'Firebase is not configured' };
+  }
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     console.log('✔️ User created:', userCredential.user);
@@ -19,6 +22,9 @@ export async function registerUser(email, password) {
 }
 
 export async function loginUser(email, password) {
+  if (!auth) {
+    return { success: false, error: 'Firebase is not configured' };
+  }
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     console.log('✔️ Logged in:', userCredential.user);
@@ -30,6 +36,9 @@ export async function loginUser(email, password) {
 }
 
 export async function signInWithGoogle() {
+  if (!auth) {
+    return { success: false, error: 'Firebase is not configured' };
+  }
   try {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
@@ -42,6 +51,9 @@ export async function signInWithGoogle() {
 }
 
 export async function signInWithApple() {
+  if (!auth) {
+    return { success: false, error: 'Firebase is not configured' };
+  }
   try {
     const provider = new OAuthProvider('apple.com');
     provider.addScope('email');
