@@ -1,7 +1,6 @@
 {
   "name": "web-lazeo-storeksa",
   "private": true,
-  "homepage": "https://hshuwaikh-lab.github.io/LAZEO-StoreKSA/",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
