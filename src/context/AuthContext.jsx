@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect } from 'react';
 import { auth } from '../config/firebase';
 import { deleteUser, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
 import { loginUser, registerUser, signInWithGoogle, signInWithApple } from '../config/firebaseAuth';
+import { apiCall, API_ENDPOINTS } from '../config/api';
 
 const mapFirebaseAuthError = (error) => {
   const code = typeof error === 'string' ? error : error?.code;
@@ -82,7 +83,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const response = await apiCall(API_ENDPOINTS.LOGIN, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -122,9 +123,8 @@ export const AuthProvider = ({ children }) => {
         throw firebaseResult.error;
       }
 
-      const response = await fetch('http://localhost:5000/api/auth/register', {
+      const response = await apiCall(API_ENDPOINTS.REGISTER, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password, role }),
       });
 
@@ -169,9 +169,8 @@ export const AuthProvider = ({ children }) => {
 
       const email = firebaseUser.email;
       const username = firebaseUser.displayName || email.split('@')[0];
-      const response = await fetch('http://localhost:5000/api/auth/social-login', {
+      const response = await apiCall(API_ENDPOINTS.SOCIAL_LOGIN, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider,
           providerId: firebaseResult.providerId,

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import './Footer.css';
 
 const Footer = () => {
@@ -7,7 +8,7 @@ const Footer = () => {
   const [settings, setSettings] = useState({});
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/settings')
+    fetch(buildApiUrl(API_ENDPOINTS.SETTINGS))
       .then(res => res.json())
       .then(data => setSettings(data))
       .catch(err => console.error(err));

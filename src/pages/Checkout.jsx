@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { Copy } from 'lucide-react';
 
 const Checkout = () => {
@@ -26,7 +27,7 @@ const Checkout = () => {
 
   const fetchBanks = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/banks');
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.BANKS));
       if (res.ok) {
         const data = await res.json();
         setBanks(data);
@@ -57,7 +58,7 @@ const Checkout = () => {
       const formData = new FormData();
       formData.append('file', file);
       try {
-        const uploadRes = await fetch('http://localhost:5000/api/upload', {
+        const uploadRes = await fetch(buildApiUrl(API_ENDPOINTS.UPLOAD), {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },
           body: formData
@@ -90,7 +91,7 @@ const Checkout = () => {
           }]
         : cartItems;
 
-      const res = await fetch('http://localhost:5000/api/orders', {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.ORDERS), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

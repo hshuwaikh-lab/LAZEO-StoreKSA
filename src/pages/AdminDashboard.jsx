@@ -1,6 +1,7 @@
 import React, { useContext, useState, useEffect, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import ExcelJS from 'exceljs';
@@ -28,49 +29,49 @@ const AdminDashboard = () => {
 
     try {
       if (activeTab === 'users' || activeTab === 'admins') {
-        const res = await fetch('http://localhost:5000/api/admin/users', { headers });
+        const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_USERS), { headers });
         if (res.ok) {
           const allUsers = await res.json();
           setData(prev => ({ ...prev, admins: allUsers.filter(u => u.role === 'admin'), users: allUsers.filter(u => u.role === 'customer') }));
         }
       } else if (activeTab === 'orders' || activeTab === 'invoices') {
-        const res = await fetch('http://localhost:5000/api/admin/orders', { headers });
+        const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_ORDERS), { headers });
         if (res.ok) {
           const d = await res.json();
           setData(prev => ({ ...prev, orders: d }));
         }
       } else if (activeTab === 'settings') {
-        const res = await fetch('http://localhost:5000/api/settings');
+        const res = await fetch(buildApiUrl(API_ENDPOINTS.SETTINGS));
         if (res.ok) {
           const d = await res.json();
           setData(prev => ({ ...prev, settings: d }));
         }
       } else if (activeTab === 'customOrders') {
-        const res = await fetch('http://localhost:5000/api/admin/custom-orders', { headers });
+        const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_CUSTOM_ORDERS), { headers });
         if (res.ok) {
           const d = await res.json();
           setData(prev => ({ ...prev, customOrders: d }));
         }
       } else if (activeTab === 'shipping') {
-        const res = await fetch('http://localhost:5000/api/admin/shipping', { headers });
+        const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_SHIPPING), { headers });
         if (res.ok) {
           const d = await res.json();
           setData(prev => ({ ...prev, shipping: d }));
         }
       } else if (activeTab === 'banks') {
-        const res = await fetch('http://localhost:5000/api/admin/banks', { headers });
+        const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_BANKS), { headers });
         if (res.ok) {
           const d = await res.json();
           setData(prev => ({ ...prev, banks: d }));
         }
       } else if (activeTab === 'products') {
-        const res = await fetch('http://localhost:5000/api/products');
+        const res = await fetch(buildApiUrl(API_ENDPOINTS.PRODUCTS));
         if (res.ok) {
           const d = await res.json();
           setData(prev => ({ ...prev, products: d }));
         }
       } else if (activeTab === 'materials') {
-        const res = await fetch('http://localhost:5000/api/materials');
+        const res = await fetch(buildApiUrl(API_ENDPOINTS.MATERIALS));
         if (res.ok) {
           const d = await res.json();
           setData(prev => ({ ...prev, materials: d }));
@@ -91,7 +92,7 @@ const AdminDashboard = () => {
   const handleQuoteUpdate = async (id, quoteValue) => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/custom-orders/${id}/quote`, {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_CUSTOM_ORDER_QUOTE(id)), {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ priceQuote: quoteValue })

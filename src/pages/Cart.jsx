@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { Trash2, ShoppingCart } from 'lucide-react';
 import './Cart.css';
 
@@ -22,7 +23,7 @@ const Cart = () => {
 
   const fetchShippingOptions = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/shipping');
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.SHIPPING));
       if (res.ok) {
         const data = await res.json();
         setShippingOptions(data);

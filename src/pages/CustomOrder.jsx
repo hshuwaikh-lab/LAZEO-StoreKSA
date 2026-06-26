@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 
 const CustomOrder = () => {
   const { t, i18n } = useTranslation();
@@ -17,7 +18,7 @@ const CustomOrder = () => {
   useEffect(() => {
     const fetchMaterials = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/materials');
+        const res = await fetch(buildApiUrl(API_ENDPOINTS.MATERIALS));
         if (res.ok) {
           const data = await res.json();
           setMaterials(data);
@@ -55,7 +56,7 @@ const CustomOrder = () => {
       const formDataUpload = new FormData();
       formDataUpload.append('file', file);
       try {
-        const uploadRes = await fetch('http://localhost:5000/api/upload', {
+        const uploadRes = await fetch(buildApiUrl(API_ENDPOINTS.UPLOAD), {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },
           body: formDataUpload
@@ -76,7 +77,7 @@ const CustomOrder = () => {
     }
 
     try {
-      const res = await fetch('http://localhost:5000/api/custom-order', {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.CUSTOM_ORDERS), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
