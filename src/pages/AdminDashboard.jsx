@@ -3,7 +3,7 @@ import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
 import InvoiceTemplate from '../components/InvoiceTemplate';
 
@@ -199,19 +199,50 @@ const AdminDashboard = () => {
   };
 
   // --- Export Excel ---
-  const exportUsersToExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(data.users.map(u => ({
-      'ID': u.id,
-      'الاسم': u.username,
-      'الإيميل': u.email,
-      'رقم الجوال': u.phone || '',
-      'العنوان': u.address || '',
-      'استلام رسائل واتساب': u.receiveWhatsApp ? 'نعم' : 'لا',
-      'تاريخ التسجيل': new Date(u.createdAt).toLocaleDateString()
-    })));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "العملاء");
-    XLSX.writeFile(wb, "customers.xlsx");
+  const exportUsersToExcel = async () => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('العملاء');
+
+      // Define columns
+      sheet.columns = [
+        { header: 'ID', key: 'id', width: 10 },
+        { header: 'الاسم', key: 'username', width: 30 },
+        { header: 'الإيميل', key: 'email', width: 30 },
+        { header: 'رقم الجوال', key: 'phone', width: 20 },
+        { header: 'العنوان', key: 'address', width: 40 },
+        { header: 'استلام رسائل واتساب', key: 'receiveWhatsApp', width: 15 },
+        { header: 'تاريخ التسجيل', key: 'createdAt', width: 20 }
+      ];
+
+      // Add rows
+      data.users.forEach(u => {
+        sheet.addRow({
+          id: u.id,
+          username: u.username,
+          email: u.email,
+          phone: u.phone || '',
+          address: u.address || '',
+          receiveWhatsApp: u.receiveWhatsApp ? 'نعم' : 'لا',
+          createdAt: new Date(u.createdAt).toLocaleDateString()
+        });
+      });
+
+      // Generate buffer and trigger download in browser
+      const buf = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'customers.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exporting users to Excel:', err);
+      alert('حدث خطأ أثناء تصدير الملف');
+    }
   };
 
   // --- Print Invoice ---
