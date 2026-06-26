@@ -9,7 +9,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "concurrently \"npm run dev\" \"cd server && node index.js\""
+    "start": "concurrently \"npm run dev\" \"cd server && node index.js\"",
+    "predeploy": "npm run build",
+    "deploy": "main -d dist"
   },
   "dependencies": {
     "exceljs": "^4.4.0",
