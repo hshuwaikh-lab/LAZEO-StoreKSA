@@ -38,6 +38,10 @@ const supabase = isSupabaseEnabled
 app.use(cors());
 app.use(express.json());
 
+app.get('/health', (req, res) => {
+  res.json({ ok: true, service: 'lazeo-storeksa-api' });
+});
+
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
