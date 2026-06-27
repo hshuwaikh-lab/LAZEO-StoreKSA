@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect, useRef } from 'react';
+import React, { useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
@@ -9,7 +9,7 @@ import html2canvas from 'html2canvas';
 import InvoiceTemplate from '../components/InvoiceTemplate';
 
 const AdminDashboard = () => {
-  const { user, logout } = useContext(AuthContext);
+  const { logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('orders'); // users, orders, customOrders, shipping, banks, products, materials, admins, settings, invoices
   const [data, setData] = useState({ users: [], orders: [], customOrders: [], shipping: [], banks: [], products: [], materials: [], admins: [], settings: {} });
@@ -17,11 +17,7 @@ const AdminDashboard = () => {
   const [printingOrder, setPrintingOrder] = useState(null);
   const invoiceRef = useRef(null);
 
-  useEffect(() => {
-    fetchData();
-  }, [activeTab]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     setLoading(true);
@@ -82,7 +78,11 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleLogout = () => {
     logout();
@@ -109,7 +109,7 @@ const AdminDashboard = () => {
   const handleOrderStatusUpdate = async (id, status) => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/orders/${id}/status`, {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_ORDER_STATUS(id)), {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
@@ -129,7 +129,7 @@ const AdminDashboard = () => {
     e.preventDefault();
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch('http://localhost:5000/api/admin/create-admin', {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_CREATE_ADMIN), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(newAdmin)
@@ -142,18 +142,22 @@ const AdminDashboard = () => {
         const errorData = await res.json();
         alert(errorData.error);
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error creating admin:', error);
+    }
   };
 
   const handleToggleAdminActive = async (id) => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/users/${id}/toggle-active`, {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_TOGGLE_USER_ACTIVE(id)), {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) fetchData();
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error toggling admin status:', error);
+    }
   };
 
   const handleChangeAdminPassword = async (id) => {
@@ -161,17 +165,22 @@ const AdminDashboard = () => {
     if (!newPassword) return;
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/users/${id}/password`, {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_USER_PASSWORD(id)), {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: newPassword })
       });
       if (res.ok) alert('تم تغيير كلمة المرور');
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error changing admin password:', error);
+    }
   };
 
   // --- Settings Management ---
   const [settingsForm, setSettingsForm] = useState({ whatsappNumber: '', whatsappToken: '', snapchatUrl: '', instagramUrl: '' });
+  const [storageHealth, setStorageHealth] = useState(null);
+  const [checkingStorageHealth, setCheckingStorageHealth] = useState(false);
+  const [storageLastCheckedAt, setStorageLastCheckedAt] = useState(null);
   useEffect(() => {
     if (data.settings) {
       setSettingsForm({
@@ -183,11 +192,53 @@ const AdminDashboard = () => {
     }
   }, [data.settings]);
 
+  const fetchStorageHealth = useCallback(async (showLoading = true) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    if (showLoading) {
+      setCheckingStorageHealth(true);
+    }
+
+    try {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_STORAGE_HEALTH), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const result = await res.json();
+      setStorageHealth({ ...result, statusCode: res.status });
+      setStorageLastCheckedAt(new Date());
+    } catch (error) {
+      setStorageHealth({
+        ok: false,
+        message: 'تعذر الاتصال بخدمة فحص التخزين',
+        error: error.message,
+        statusCode: 0
+      });
+      setStorageLastCheckedAt(new Date());
+    } finally {
+      if (showLoading) {
+        setCheckingStorageHealth(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStorageHealth(false);
+  }, [fetchStorageHealth]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      fetchStorageHealth(false);
+    }, 60000);
+
+    return () => clearInterval(intervalId);
+  }, [fetchStorageHealth]);
+
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch('http://localhost:5000/api/admin/settings', {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_SETTINGS), {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(settingsForm)
@@ -196,7 +247,13 @@ const AdminDashboard = () => {
         alert('تم حفظ الإعدادات بنجاح');
         fetchData();
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error saving settings:', error);
+    }
+  };
+
+  const handleCheckStorageHealth = async () => {
+    await fetchStorageHealth(true);
   };
 
   // --- Export Excel ---
@@ -262,7 +319,7 @@ const AdminDashboard = () => {
           
           if (!order.invoicePrinted) {
             const token = localStorage.getItem('token');
-            await fetch(`http://localhost:5000/api/admin/orders/${order.id}/invoice-printed`, {
+            await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_ORDER_INVOICE_PRINTED(order.id)), {
               method: 'PUT',
               headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -281,7 +338,7 @@ const AdminDashboard = () => {
     if (!window.confirm('هل أنت متأكد من مسح هذا العميل؟ سيتم مسح جميع طلباته أيضاً.')) return;
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/users/${id}`, {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_USER_DELETE(id)), {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -291,7 +348,7 @@ const AdminDashboard = () => {
       } else {
         alert('فشل مسح العميل');
       }
-    } catch (error) {
+    } catch {
       alert('حدث خطأ أثناء الاتصال');
     }
   };
@@ -320,7 +377,7 @@ const AdminDashboard = () => {
       const formData = new FormData();
       formData.append('file', shippingLogoFile);
       try {
-        const uploadRes = await fetch('http://localhost:5000/api/upload', {
+        const uploadRes = await fetch(buildApiUrl(API_ENDPOINTS.UPLOAD), {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },
           body: formData
@@ -332,7 +389,7 @@ const AdminDashboard = () => {
           alert('فشل رفع شعار الشحن');
           return;
         }
-      } catch (err) {
+      } catch {
         alert('حدث خطأ أثناء الرفع');
         return;
       }
@@ -340,9 +397,9 @@ const AdminDashboard = () => {
 
     try {
       const method = editingShippingId ? 'PUT' : 'POST';
-      const url = editingShippingId 
-        ? `http://localhost:5000/api/admin/shipping/${editingShippingId}`
-        : 'http://localhost:5000/api/admin/shipping';
+      const url = editingShippingId
+        ? buildApiUrl(API_ENDPOINTS.ADMIN_SHIPPING_DETAIL(editingShippingId))
+        : buildApiUrl(API_ENDPOINTS.ADMIN_SHIPPING);
 
       const res = await fetch(url, {
         method,
@@ -353,7 +410,9 @@ const AdminDashboard = () => {
         handleCancelEditShipping();
         fetchData();
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error saving shipping:', error);
+    }
   };
 
   const [newMaterial, setNewMaterial] = useState({ nameAr: '', nameEn: '' });
@@ -374,9 +433,9 @@ const AdminDashboard = () => {
     const token = localStorage.getItem('token');
     try {
       const method = editingMaterialId ? 'PUT' : 'POST';
-      const url = editingMaterialId 
-        ? `http://localhost:5000/api/admin/materials/${editingMaterialId}`
-        : 'http://localhost:5000/api/admin/materials';
+      const url = editingMaterialId
+        ? buildApiUrl(API_ENDPOINTS.ADMIN_MATERIALS_DETAIL(editingMaterialId))
+        : buildApiUrl(API_ENDPOINTS.ADMIN_MATERIALS);
 
       const res = await fetch(url, {
         method,
@@ -387,21 +446,25 @@ const AdminDashboard = () => {
         handleCancelEditMaterial();
         fetchData();
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error saving material:', error);
+    }
   };
 
   const handleDeleteMaterial = async (id) => {
     if (!window.confirm('هل أنت متأكد من حذف هذه المادة؟')) return;
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/materials/${id}`, {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_MATERIALS_DETAIL(id)), {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         fetchData();
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error deleting material:', error);
+    }
   };
 
   const [newBank, setNewBank] = useState({ bankName: '', accountName: '', accountNumber: '', iban: '' });
@@ -428,14 +491,16 @@ const AdminDashboard = () => {
     if (!window.confirm('هل أنت متأكد من حذف هذا المنتج؟')) return;
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/products/${id}`, {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_PRODUCTS_DETAIL(id)), {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         fetchData();
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error deleting product:', error);
+    }
   };
 
   const handleSaveProduct = async (e) => {
@@ -447,7 +512,7 @@ const AdminDashboard = () => {
       const formData = new FormData();
       formData.append('file', productImageFile);
       try {
-        const uploadRes = await fetch('http://localhost:5000/api/upload', {
+        const uploadRes = await fetch(buildApiUrl(API_ENDPOINTS.UPLOAD), {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },
           body: formData
@@ -459,7 +524,7 @@ const AdminDashboard = () => {
           alert('فشل رفع الصورة');
           return;
         }
-      } catch (err) {
+      } catch {
         alert('حدث خطأ أثناء الرفع');
         return;
       }
@@ -467,9 +532,9 @@ const AdminDashboard = () => {
 
     try {
       const method = editingProductId ? 'PUT' : 'POST';
-      const url = editingProductId 
-        ? `http://localhost:5000/api/admin/products/${editingProductId}`
-        : 'http://localhost:5000/api/admin/products';
+      const url = editingProductId
+        ? buildApiUrl(API_ENDPOINTS.ADMIN_PRODUCTS_DETAIL(editingProductId))
+        : buildApiUrl(API_ENDPOINTS.ADMIN_PRODUCTS);
 
       const res = await fetch(url, {
         method,
@@ -480,7 +545,9 @@ const AdminDashboard = () => {
         handleCancelEditProduct();
         fetchData();
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error saving product:', error);
+    }
   };
 
   const handleEditBank = (bank) => {
@@ -504,7 +571,7 @@ const AdminDashboard = () => {
       const formData = new FormData();
       formData.append('file', bankLogoFile);
       try {
-        const uploadRes = await fetch('http://localhost:5000/api/upload', {
+        const uploadRes = await fetch(buildApiUrl(API_ENDPOINTS.UPLOAD), {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },
           body: formData
@@ -517,25 +584,20 @@ const AdminDashboard = () => {
           alert('فشل رفع الشعار: ' + uploadRes.status + ' - ' + text);
           return;
         }
-      } catch (err) {
+      } catch {
         alert('حدث خطأ أثناء الرفع');
         return;
       }
     }
 
-    // If editing, but no new file was uploaded, we shouldn't overwrite the existing logoUrl with null
-    // However, our backend update logic sets logoUrl unconditionally. 
-    // Wait, let's fetch the existing logoUrl if not providing a new one.
-    // Actually, if we send logoUrl as undefined, Prisma might ignore it if we don't include it in data, but our backend extracts `logoUrl` from body.
-    // Let's find the existing bank logoUrl.
     const existingBank = data.banks.find(b => b.id === editingBankId);
     const finalLogoUrl = logoUrl || (existingBank ? existingBank.logoUrl : null);
 
     try {
       const method = editingBankId ? 'PUT' : 'POST';
-      const url = editingBankId 
-        ? `http://localhost:5000/api/admin/banks/${editingBankId}`
-        : 'http://localhost:5000/api/admin/banks';
+      const url = editingBankId
+        ? buildApiUrl(API_ENDPOINTS.ADMIN_BANKS_DETAIL(editingBankId))
+        : buildApiUrl(API_ENDPOINTS.ADMIN_BANKS);
 
       const res = await fetch(url, {
         method,
@@ -548,18 +610,70 @@ const AdminDashboard = () => {
         setEditingBankId(null);
         fetchData();
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error('Error saving bank:', error);
+    }
   };
 
   return (
     <div style={{ padding: '2rem', minHeight: '80vh', background: '#f8fafc' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', background: 'white', padding: '2rem', borderRadius: '1rem', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-          <h2>لوحة تحكم الإدارة</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 style={{ margin: 0 }}>لوحة تحكم الإدارة</h2>
+            <span
+              title={storageHealth ? `Storage: ${storageHealth.ok ? 'OK' : 'Error'}` : 'Storage: Checking'}
+              style={{
+                width: '12px',
+                height: '12px',
+                borderRadius: '50%',
+                display: 'inline-block',
+                background: !storageHealth ? '#f59e0b' : (storageHealth.ok ? '#16a34a' : '#dc2626')
+              }}
+            />
+          </div>
           <button onClick={handleLogout} className="btn-solid" style={{ background: '#ef4444', color: 'white', padding: '0.5rem 1rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer' }}>
             تسجيل الخروج
           </button>
         </div>
+
+        {storageHealth && (
+          <div
+            style={{
+              marginBottom: '16px',
+              border: `1px solid ${storageHealth.ok ? '#bbf7d0' : '#fecaca'}`,
+              background: storageHealth.ok ? '#f0fdf4' : '#fef2f2',
+              borderRadius: '10px',
+              padding: '12px 14px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: '10px',
+              alignItems: 'center',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <strong>حالة التخزين: {storageHealth.ok ? 'جاهز' : 'يوجد مشكلة'}</strong>
+              <span style={{ fontSize: '0.9rem' }}>
+                الوضع: {storageHealth.mode || '-'} | المزود: {storageHealth.provider || '-'} | الحد الأقصى: {storageHealth.maxUploadSizeMb ? `${storageHealth.maxUploadSizeMb}MB` : '-'}
+              </span>
+              <span style={{ fontSize: '0.9rem' }}>{storageHealth.message || '-'}</span>
+              {storageLastCheckedAt && (
+                <span style={{ fontSize: '0.85rem', color: '#374151' }}>
+                  آخر فحص: {storageLastCheckedAt.toLocaleTimeString()}
+                </span>
+              )}
+              {storageHealth.mode === 'local-fallback' && (
+                <span style={{ color: '#b45309', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                  تنبيه: النظام يعمل حالياً بالتخزين المحلي. فعّل متغيرات Supabase للإنتاج.
+                </span>
+              )}
+            </div>
+            <button type="button" className="btn-secondary" onClick={handleCheckStorageHealth} disabled={checkingStorageHealth} style={{ padding: '8px 16px' }}>
+              {checkingStorageHealth ? 'جاري الفحص...' : 'تحديث الحالة'}
+            </button>
+          </div>
+        )}
         
         <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
           <button className={activeTab === 'users' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('users')}>سجل العملاء</button>
@@ -651,7 +765,23 @@ const AdminDashboard = () => {
                 <input type="text" placeholder="توكن الواتساب (API Token)" value={settingsForm.whatsappToken} onChange={e => setSettingsForm({...settingsForm, whatsappToken: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
                 <input type="text" placeholder="رابط السناب شات" value={settingsForm.snapchatUrl} onChange={e => setSettingsForm({...settingsForm, snapchatUrl: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
                 <input type="text" placeholder="رابط الانستغرام" value={settingsForm.instagramUrl} onChange={e => setSettingsForm({...settingsForm, instagramUrl: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
-                <button type="submit" className="btn-primary" style={{ padding: '8px 16px', width: 'fit-content' }}>حفظ الإعدادات</button>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button type="submit" className="btn-primary" style={{ padding: '8px 16px', width: 'fit-content' }}>حفظ الإعدادات</button>
+                  <button type="button" className="btn-secondary" onClick={handleCheckStorageHealth} disabled={checkingStorageHealth} style={{ padding: '8px 16px' }}>
+                    {checkingStorageHealth ? 'جاري الفحص...' : 'فحص حالة التخزين'}
+                  </button>
+                </div>
+                {storageHealth && (
+                  <div style={{ border: '1px solid #d1d5db', borderRadius: '8px', padding: '12px', background: storageHealth.ok ? '#ecfdf5' : '#fef2f2', color: '#111827' }}>
+                    <div><strong>الحالة:</strong> {storageHealth.ok ? 'جاهز' : 'يوجد مشكلة'}</div>
+                    <div><strong>الوضع:</strong> {storageHealth.mode || '-'}</div>
+                    <div><strong>المزود:</strong> {storageHealth.provider || '-'}</div>
+                    <div><strong>الحاوية:</strong> {storageHealth.bucket || '-'}</div>
+                    <div><strong>الحد الأقصى:</strong> {storageHealth.maxUploadSizeMb ? `${storageHealth.maxUploadSizeMb}MB` : '-'}</div>
+                    <div><strong>رسالة:</strong> {storageHealth.message || '-'}</div>
+                    {storageHealth.error && <div><strong>الخطأ:</strong> {storageHealth.error}</div>}
+                  </div>
+                )}
               </form>
             )}
 

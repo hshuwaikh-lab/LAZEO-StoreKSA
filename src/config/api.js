@@ -14,6 +14,13 @@ export const API_ENDPOINTS = {
   LOGIN: '/api/auth/login',
   REGISTER: '/api/auth/register',
   SOCIAL_LOGIN: '/api/auth/social-login',
+  FORGOT_PASSWORD: '/api/auth/forgot-password',
+
+  // User
+  USER_PROFILE: '/api/user/profile',
+  USER_ORDERS: '/api/user/orders',
+  USER_CUSTOM_ORDERS: '/api/user/custom-orders',
+  USER_PASSWORD: '/api/user/password',
   
   // Products
   PRODUCTS: '/api/products',
@@ -40,13 +47,25 @@ export const API_ENDPOINTS = {
   
   // Admin
   ADMIN_USERS: '/api/admin/users',
+  ADMIN_USER_DELETE: (id) => `/api/admin/users/${id}`,
+  ADMIN_CREATE_ADMIN: '/api/admin/create-admin',
+  ADMIN_TOGGLE_USER_ACTIVE: (id) => `/api/admin/users/${id}/toggle-active`,
+  ADMIN_USER_PASSWORD: (id) => `/api/admin/users/${id}/password`,
   ADMIN_ORDERS: '/api/admin/orders',
+  ADMIN_ORDER_STATUS: (id) => `/api/admin/orders/${id}/status`,
+  ADMIN_ORDER_INVOICE_PRINTED: (id) => `/api/admin/orders/${id}/invoice-printed`,
   ADMIN_CUSTOM_ORDERS: '/api/admin/custom-orders',
   ADMIN_CUSTOM_ORDER_QUOTE: (id) => `/api/admin/custom-orders/${id}/quote`,
   ADMIN_SHIPPING: '/api/admin/shipping',
+  ADMIN_SHIPPING_DETAIL: (id) => `/api/admin/shipping/${id}`,
   ADMIN_BANKS: '/api/admin/banks',
+  ADMIN_BANKS_DETAIL: (id) => `/api/admin/banks/${id}`,
   ADMIN_PRODUCTS: '/api/admin/products',
+  ADMIN_PRODUCTS_DETAIL: (id) => `/api/admin/products/${id}`,
   ADMIN_MATERIALS: '/api/admin/materials',
+  ADMIN_MATERIALS_DETAIL: (id) => `/api/admin/materials/${id}`,
+  ADMIN_SETTINGS: '/api/admin/settings',
+  ADMIN_STORAGE_HEALTH: '/api/admin/storage/health',
 };
 
 // Helper function for API calls

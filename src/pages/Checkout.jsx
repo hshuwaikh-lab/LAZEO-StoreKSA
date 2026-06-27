@@ -8,7 +8,7 @@ import { Copy } from 'lucide-react';
 const Checkout = () => {
   const navigate = useNavigate();
   const { cartItems, currentTotal, finalTotal, shippingMethod, shippingCost, clearCart } = useCart();
-  const { user } = useContext(AuthContext);
+  useContext(AuthContext);
 
   const [banks, setBanks] = useState([]);
   const [selectedBank, setSelectedBank] = useState(null);
@@ -66,7 +66,7 @@ const Checkout = () => {
         if (!uploadRes.ok) throw new Error('Upload failed');
         const uploadData = await uploadRes.json();
         finalReceiptUrl = uploadData.url;
-      } catch (err) {
+      } catch {
         alert('حدث خطأ أثناء رفع الصورة');
         return;
       }

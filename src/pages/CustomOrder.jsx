@@ -64,7 +64,7 @@ const CustomOrder = () => {
         if (!uploadRes.ok) throw new Error('Upload failed');
         const uploadData = await uploadRes.json();
         finalAttachmentUrl = uploadData.url;
-      } catch (err) {
+      } catch {
         alert('حدث خطأ أثناء رفع الصورة');
         return;
       }

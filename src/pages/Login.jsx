@@ -1,6 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import './Login.css';
 
 const Login = () => {
@@ -43,7 +44,7 @@ const Login = () => {
     const phoneOrEmail = prompt('أدخل رقم الجوال أو البريد الإلكتروني المسجل لاستعادة كلمة المرور:');
     if (!phoneOrEmail) return;
     try {
-      const res = await fetch('http://localhost:5000/api/auth/forgot-password', {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.FORGOT_PASSWORD), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: phoneOrEmail })
@@ -54,7 +55,7 @@ const Login = () => {
       } else {
         alert(data.error || 'حدث خطأ');
       }
-    } catch (err) {
+    } catch {
       alert('حدث خطأ أثناء الاتصال بالخادم');
     }
   };

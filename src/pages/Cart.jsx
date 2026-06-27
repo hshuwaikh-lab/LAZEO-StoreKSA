@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
@@ -17,11 +17,7 @@ const Cart = () => {
   const [shippingOptions, setShippingOptions] = useState([]);
   const [loadingShipping, setLoadingShipping] = useState(true);
 
-  useEffect(() => {
-    fetchShippingOptions();
-  }, []);
-
-  const fetchShippingOptions = async () => {
+  const fetchShippingOptions = useCallback(async () => {
     try {
       const res = await fetch(buildApiUrl(API_ENDPOINTS.SHIPPING));
       if (res.ok) {
@@ -37,7 +33,11 @@ const Cart = () => {
     } finally {
       setLoadingShipping(false);
     }
-  };
+  }, [setShippingMethod, shippingMethod]);
+
+  useEffect(() => {
+    fetchShippingOptions();
+  }, [fetchShippingOptions]);
 
   const handleCheckout = () => {
     if (!user) {

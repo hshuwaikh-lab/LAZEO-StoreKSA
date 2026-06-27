@@ -5,9 +5,10 @@ import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import InvoiceTemplate from '../components/InvoiceTemplate';
 import { AuthContext } from '../context/AuthContext';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 
 const Profile = () => {
-  const { t } = useTranslation();
+  useTranslation();
   const [activeTab, setActiveTab] = useState('info'); // info, orders, customOrders, password
   const [profile, setProfile] = useState({ username: '', email: '', phone: '', address: '', receiveWhatsApp: true });
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '' });
@@ -31,9 +32,9 @@ const Profile = () => {
       const headers = { 'Authorization': `Bearer ${token}` };
       
       const [profileRes, ordersRes, customRes] = await Promise.all([
-        fetch('http://localhost:5000/api/user/profile', { headers }),
-        fetch('http://localhost:5000/api/user/orders', { headers }),
-        fetch('http://localhost:5000/api/user/custom-orders', { headers })
+        fetch(buildApiUrl(API_ENDPOINTS.USER_PROFILE), { headers }),
+        fetch(buildApiUrl(API_ENDPOINTS.USER_ORDERS), { headers }),
+        fetch(buildApiUrl(API_ENDPOINTS.USER_CUSTOM_ORDERS), { headers })
       ]);
 
       if (profileRes.ok) setProfile(await profileRes.json());
@@ -50,7 +51,7 @@ const Profile = () => {
     e.preventDefault();
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch('http://localhost:5000/api/user/profile', {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.USER_PROFILE), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -73,7 +74,7 @@ const Profile = () => {
     e.preventDefault();
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch('http://localhost:5000/api/user/password', {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.USER_PASSWORD), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -187,7 +188,9 @@ const Profile = () => {
                     let itemsCount = 0;
                     try {
                       itemsCount = JSON.parse(o.items).length;
-                    } catch(e) {}
+                    } catch (e) {
+                      console.error('Failed to parse order items:', e);
+                    }
                     return (
                     <tr key={o.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                       <td style={{ padding: '10px' }}>{o.invoiceNumber || '-'}</td>

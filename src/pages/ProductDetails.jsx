@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useCart } from '../context/CartContext';
 import { ArrowRight, ArrowLeft } from 'lucide-react';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import './ProductDetails.css';
 
 const ProductDetails = () => {
@@ -21,7 +22,7 @@ const ProductDetails = () => {
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/products/${id}`);
+        const res = await fetch(buildApiUrl(API_ENDPOINTS.PRODUCT_DETAIL(id)));
         if (res.ok) {
           const data = await res.json();
           setProduct(data);

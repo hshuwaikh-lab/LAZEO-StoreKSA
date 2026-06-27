@@ -6,11 +6,34 @@ const { PrismaClient } = require('@prisma/client');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { createClient } = require('@supabase/supabase-js');
+
+require('dotenv').config();
 
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
 const SECRET_KEY = process.env.JWT_SECRET || 'lazeo_super_secret_key_123';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'lazeo-uploads';
+const MAX_UPLOAD_SIZE_MB = parseInt(process.env.MAX_UPLOAD_SIZE_MB || '10', 10);
+const isSupabaseEnabled = Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
+const maxUploadSizeBytes = Number.isNaN(MAX_UPLOAD_SIZE_MB)
+  ? 10 * 1024 * 1024
+  : Math.max(MAX_UPLOAD_SIZE_MB, 1) * 1024 * 1024;
+const allowedUploadMimeTypes = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'application/pdf',
+  'text/plain'
+]);
+
+const supabase = isSupabaseEnabled
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  : null;
 
 app.use(cors());
 app.use(express.json());
@@ -20,17 +43,61 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, 'uploads'));
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: maxUploadSizeBytes },
+  fileFilter: (req, file, cb) => {
+    if (!allowedUploadMimeTypes.has(file.mimetype)) {
+      return cb(new Error('نوع الملف غير مدعوم'));
+    }
+    return cb(null, true);
   }
 });
-const upload = multer({ storage });
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+function buildSafeFileName(originalName) {
+  const extension = path.extname(originalName || '').toLowerCase();
+  const baseName = path
+    .basename(originalName || 'file', extension)
+    .replace(/[^a-zA-Z0-9-_]/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 80);
+
+  return `${Date.now()}-${baseName || 'file'}${extension}`;
+}
+
+function extractSupabaseStoragePath(fileUrl) {
+  if (!isSupabaseEnabled || !fileUrl) return null;
+
+  try {
+    const parsed = new URL(fileUrl);
+    const marker = `/storage/v1/object/public/${SUPABASE_STORAGE_BUCKET}/`;
+    const markerIndex = parsed.pathname.indexOf(marker);
+    if (markerIndex === -1) {
+      return null;
+    }
+
+    return parsed.pathname.slice(markerIndex + marker.length);
+  } catch (error) {
+    return null;
+  }
+}
+
+async function deleteSupabaseFileByUrl(fileUrl) {
+  const storagePath = extractSupabaseStoragePath(fileUrl);
+  if (!storagePath) {
+    return;
+  }
+
+  const { error } = await supabase.storage
+    .from(SUPABASE_STORAGE_BUCKET)
+    .remove([storagePath]);
+
+  if (error) {
+    console.error('Failed to delete Supabase file:', error.message);
+  }
+}
 
 async function ensureAdminUser() {
   const adminEmail = 'admin@lazeo.com';
@@ -235,12 +302,42 @@ function requireAdmin(req, res, next) {
   next();
 };
 
-app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => {
+app.post('/api/upload', authenticateToken, upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'لم يتم إرفاق ملف' });
   }
-  const fileUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
-  res.json({ url: fileUrl });
+
+  try {
+    const fileName = buildSafeFileName(req.file.originalname);
+
+    if (isSupabaseEnabled) {
+      const filePath = `uploads/${fileName}`;
+      const { error: uploadError } = await supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .upload(filePath, req.file.buffer, {
+          contentType: req.file.mimetype,
+          upsert: false
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data } = supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .getPublicUrl(filePath);
+
+      return res.json({ url: data.publicUrl });
+    }
+
+    const localPath = path.join(uploadsDir, fileName);
+    await fs.promises.writeFile(localPath, req.file.buffer);
+    const localUrl = `${req.protocol}://${req.get('host')}/uploads/${fileName}`;
+    return res.json({ url: localUrl });
+  } catch (error) {
+    console.error('Upload failed:', error);
+    return res.status(500).json({ error: 'فشل رفع الملف' });
+  }
 });
 
 // --- User Profile Routes ---
@@ -339,12 +436,73 @@ app.put('/api/admin/users/:id/password', authenticateToken, requireAdmin, async 
 app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   const userId = parseInt(req.params.id);
   try {
+    const [orders, customOrders] = await Promise.all([
+      prisma.order.findMany({ where: { userId }, select: { receiptUrl: true } }),
+      prisma.customOrder.findMany({ where: { userId }, select: { attachmentUrl: true } })
+    ]);
+
+    const fileUrls = [
+      ...orders.map((order) => order.receiptUrl).filter(Boolean),
+      ...customOrders.map((order) => order.attachmentUrl).filter(Boolean)
+    ];
+
+    await Promise.all(fileUrls.map((url) => deleteSupabaseFileByUrl(url)));
+
     await prisma.order.deleteMany({ where: { userId } });
     await prisma.customOrder.deleteMany({ where: { userId } });
     await prisma.user.delete({ where: { id: userId } });
     res.json({ message: 'تم مسح العميل بنجاح' });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/admin/storage/health', authenticateToken, requireAdmin, async (req, res) => {
+  const baseStatus = {
+    provider: isSupabaseEnabled ? 'supabase' : 'local',
+    bucket: SUPABASE_STORAGE_BUCKET,
+    maxUploadSizeMb: Math.round(maxUploadSizeBytes / (1024 * 1024))
+  };
+
+  if (!isSupabaseEnabled) {
+    return res.json({
+      ...baseStatus,
+      ok: true,
+      mode: 'local-fallback',
+      message: 'Supabase غير مفعل. الرفع المحلي يعمل حالياً.'
+    });
+  }
+
+  try {
+    const { data, error } = await supabase.storage
+      .from(SUPABASE_STORAGE_BUCKET)
+      .list('uploads', { limit: 1 });
+
+    if (error) {
+      return res.status(500).json({
+        ...baseStatus,
+        ok: false,
+        mode: 'supabase',
+        message: 'فشل التحقق من Supabase Storage',
+        error: error.message
+      });
+    }
+
+    return res.json({
+      ...baseStatus,
+      ok: true,
+      mode: 'supabase',
+      message: 'Supabase Storage متصل وجاهز',
+      sampleObjectCount: data?.length || 0
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ...baseStatus,
+      ok: false,
+      mode: 'supabase',
+      message: 'خطأ غير متوقع أثناء فحص Supabase Storage',
+      error: error.message
+    });
   }
 });
 
@@ -419,10 +577,16 @@ app.put('/api/admin/shipping/:id', authenticateToken, requireAdmin, async (req, 
   const { id } = req.params;
   const { name, price, estimatedDays, logoUrl } = req.body;
   try {
+    const existingShipping = await prisma.shippingMethod.findUnique({ where: { id: parseInt(id) } });
     const updatedShipping = await prisma.shippingMethod.update({
       where: { id: parseInt(id) },
       data: { name, price: parseFloat(price), estimatedDays, logoUrl }
     });
+
+    if (existingShipping?.logoUrl && logoUrl && existingShipping.logoUrl !== logoUrl) {
+      await deleteSupabaseFileByUrl(existingShipping.logoUrl);
+    }
+
     res.json(updatedShipping);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -452,10 +616,16 @@ app.put('/api/admin/banks/:id', authenticateToken, requireAdmin, async (req, res
   const { id } = req.params;
   const { bankName, accountName, accountNumber, iban, logoUrl } = req.body;
   try {
+    const existingBank = await prisma.bankAccount.findUnique({ where: { id: parseInt(id) } });
     const updatedBank = await prisma.bankAccount.update({
       where: { id: parseInt(id) },
       data: { bankName, accountName, accountNumber, iban, logoUrl }
     });
+
+    if (existingBank?.logoUrl && logoUrl && existingBank.logoUrl !== logoUrl) {
+      await deleteSupabaseFileByUrl(existingBank.logoUrl);
+    }
+
     res.json(updatedBank);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -581,10 +751,16 @@ app.put('/api/admin/products/:id', authenticateToken, requireAdmin, async (req, 
   const { id } = req.params;
   const { nameAr, nameEn, price, image, descriptionAr, descriptionEn, category } = req.body;
   try {
+    const existingProduct = await prisma.product.findUnique({ where: { id: parseInt(id) } });
     const updatedProduct = await prisma.product.update({
       where: { id: parseInt(id) },
       data: { nameAr, nameEn, price: parseFloat(price), image, descriptionAr, descriptionEn, category }
     });
+
+    if (existingProduct?.image && image && existingProduct.image !== image) {
+      await deleteSupabaseFileByUrl(existingProduct.image);
+    }
+
     res.json(updatedProduct);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -594,7 +770,9 @@ app.put('/api/admin/products/:id', authenticateToken, requireAdmin, async (req, 
 app.delete('/api/admin/products/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
+    const product = await prisma.product.findUnique({ where: { id: parseInt(id) } });
     await prisma.product.delete({ where: { id: parseInt(id) } });
+    await deleteSupabaseFileByUrl(product?.image);
     res.json({ message: 'Product deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -678,6 +856,20 @@ app.put('/api/admin/settings', authenticateToken, requireAdmin, async (req, res)
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
+});
+
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({
+      error: `حجم الملف أكبر من الحد المسموح (${Math.round(maxUploadSizeBytes / (1024 * 1024))}MB)`
+    });
+  }
+
+  if (err && err.message === 'نوع الملف غير مدعوم') {
+    return res.status(400).json({ error: err.message });
+  }
+
+  return next(err);
 });
 
 ensureAdminUser().then(() => {

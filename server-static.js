@@ -26,7 +26,7 @@ for (const p of possiblePaths) {
       DIST_DIR = p;
       break;
     }
-  } catch (e) {
+  } catch {
     continue;
   }
 }

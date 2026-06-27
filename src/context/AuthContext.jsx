@@ -58,8 +58,8 @@ export const AuthProvider = ({ children }) => {
       setToken(storedToken);
       try {
         setUser(JSON.parse(storedUser));
-      } catch (e) {
-        console.error('Error parsing stored user data');
+      } catch (error) {
+        console.error('Error parsing stored user data:', error);
       }
     }
 

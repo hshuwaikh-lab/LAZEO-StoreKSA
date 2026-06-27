@@ -25,7 +25,7 @@ export default function handler(req, res) {
   }
 
   if (req.url === '/api/auth/login' && req.method === 'POST') {
-    const { email, password } = req.body;
+    const { email } = req.body;
     return res.status(200).json({
       message: 'تم تسجيل الدخول بنجاح',
       token: 'mock_token_' + Date.now(),
