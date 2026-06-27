@@ -9,7 +9,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 3000;
-const DIST_DIR = path.join(__dirname, 'dist');
+// Look for dist in the root directory
+const DIST_DIR = fs.existsSync(path.join(__dirname, 'dist')) 
+  ? path.join(__dirname, 'dist')
+  : path.join(__dirname, '..', 'dist');
 
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
