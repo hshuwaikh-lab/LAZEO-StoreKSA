@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: lazeo-storeksa-api
+    env: node
+    region: us-east
+    plan: free
+    buildCommand: cd server && npm install && npx prisma generate
+    startCommand: cd server && npx prisma db push --skip-generate && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: JWT_SECRET
+        value: lazeo_production_secret_key_2026
+      - key: DATABASE_URL
+        value: file:./prisma/dev.db
+      - key: CORS_ORIGIN
+        value: https://lazeo-storeksa.vercel.app

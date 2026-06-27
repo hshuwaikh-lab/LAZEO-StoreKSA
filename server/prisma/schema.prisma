@@ -3,12 +3,12 @@ generator client {
 }
 
 datasource db {
-  provider = "mongodb"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id              String   @id @default(auto()) @db.ObjectId
+  id              Int      @id @default(autoincrement())
   email           String   @unique
   username        String
   password        String
@@ -26,14 +26,14 @@ model User {
 }
 
 model Order {
-  id             String   @id @default(auto()) @db.ObjectId
-  userId         String   @db.ObjectId
+  id             Int      @id @default(autoincrement())
+  userId         Int
   items          String   // JSON string of items
   totalAmount    Float
   status         String   @default("pending") // pending, paid, shipped, delivered, rejected
   receiptUrl     String?
   receiptText    String?
-  bankId         String?  @db.ObjectId
+  bankId         Int?
   invoicePrinted Boolean  @default(false)
   invoiceNumber  String?
   createdAt      DateTime @default(now())
@@ -43,8 +43,8 @@ model Order {
 }
 
 model CustomOrder {
-  id            String   @id @default(auto()) @db.ObjectId
-  userId        String   @db.ObjectId
+  id            Int      @id @default(autoincrement())
+  userId        Int
   material      String
   details       String
   attachmentUrl String?
@@ -57,7 +57,7 @@ model CustomOrder {
 }
 
 model ShippingMethod {
-  id            String   @id @default(auto()) @db.ObjectId
+  id            Int      @id @default(autoincrement())
   name          String
   price         Float
   estimatedDays String
@@ -65,7 +65,7 @@ model ShippingMethod {
 }
 
 model BankAccount {
-  id            String   @id @default(auto()) @db.ObjectId
+  id            Int      @id @default(autoincrement())
   bankName      String
   accountName   String
   accountNumber String
@@ -76,7 +76,7 @@ model BankAccount {
 }
 
 model Product {
-  id            String   @id @default(auto()) @db.ObjectId
+  id            Int      @id @default(autoincrement())
   nameAr        String
   nameEn        String
   price         Float
@@ -89,14 +89,14 @@ model Product {
 }
 
 model Material {
-  id        String   @id @default(auto()) @db.ObjectId
+  id        Int      @id @default(autoincrement())
   nameAr    String
   nameEn    String
   createdAt DateTime @default(now())
 }
 
 model StoreSettings {
-  id             String   @id @default(auto()) @db.ObjectId
+  id             Int      @id @default(autoincrement())
   whatsappNumber String?
   whatsappToken  String?
   snapchatUrl    String?
