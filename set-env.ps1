@@ -2,7 +2,7 @@
 
 # Set Vercel environment variables for production
 $env_vars = @{
-    "VITE_API_BASE_URL" = "https://lazeo-storeksa.onrender.com"
+    "VITE_API_BASE_URL" = "https://lazeo-storeksa-api.onrender.com"
     "VITE_SUPABASE_URL" = "https://hslolngigrxwviklahme.supabase.co"
     "VITE_SUPABASE_ANON_KEY" = "YOUR_SUPABASE_ANON_KEY"
 }
