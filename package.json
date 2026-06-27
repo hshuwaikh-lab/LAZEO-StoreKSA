@@ -9,7 +9,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "npx serve -s dist -l 3000",
+    "start": "node server-static.js",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
   },
