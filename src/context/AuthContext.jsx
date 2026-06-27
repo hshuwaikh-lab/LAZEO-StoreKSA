@@ -1,10 +1,25 @@
 import React, { createContext, useState, useEffect } from 'react';
 import { apiCall, API_ENDPOINTS } from '../config/api';
-import { getSocialRedirectUrl, isSupabaseAuthConfigured, supabase } from '../config/supabaseAuth';
+import {
+  getSocialRedirectUrl,
+  getSupabaseAuthConfigError,
+  isSupabaseAuthConfigured,
+  supabase,
+} from '../config/supabaseAuth';
 
 const mapAuthError = (error) => {
-  if (typeof error === 'string') return error;
-  if (error?.message) return error.message;
+  const code = typeof error === 'string' ? error : error?.code;
+  const message = typeof error === 'string' ? error : error?.message;
+
+  if (code === 'auth/network-request-failed') {
+    return 'تعذر الاتصال بخدمة المصادقة. تحقق من اتصال الإنترنت ومن إعدادات Supabase Auth.';
+  }
+
+  if (message && /network|failed to fetch|fetch/i.test(message)) {
+    return 'تعذر الاتصال بالخادم. تحقق من VITE_API_BASE_URL وأن واجهة API تعمل ومتاحة من نفس البيئة.';
+  }
+
+  if (message) return message;
   return 'حدث خطأ في المصادقة';
 };
 
@@ -88,7 +103,8 @@ export const AuthProvider = ({ children }) => {
 
   const startSocialLogin = async (provider) => {
     if (!isSupabaseAuthConfigured || !supabase) {
-      throw new Error('إعدادات Supabase Auth غير مكتملة. أضف VITE_SUPABASE_URL و VITE_SUPABASE_ANON_KEY.');
+      const configError = getSupabaseAuthConfigError() || 'إعدادات Supabase Auth غير مكتملة.';
+      throw new Error(`${configError} أضف القيم الصحيحة في متغيرات البيئة ثم أعد النشر.`);
     }
 
     const redirectTo = getSocialRedirectUrl('/login');
@@ -129,19 +145,28 @@ export const AuthProvider = ({ children }) => {
       supabaseUser.user_metadata?.name ||
       email.split('@')[0];
 
-    const response = await apiCall(API_ENDPOINTS.SOCIAL_LOGIN, {
-      method: 'POST',
-      body: JSON.stringify({
-        provider,
-        providerId: supabaseUser.id,
-        email,
-        username,
-      }),
-    });
+    let response;
+    let data;
+    try {
+      response = await apiCall(API_ENDPOINTS.SOCIAL_LOGIN, {
+        method: 'POST',
+        body: JSON.stringify({
+          provider,
+          providerId: supabaseUser.id,
+          email,
+          username,
+        }),
+      });
 
-    const data = await response.json();
+      data = await response.json();
+    } catch {
+      throw new Error(
+        'تمت المصادقة مع مزود الدخول لكن تعذر الوصول إلى خادم التطبيق. تحقق من VITE_API_BASE_URL وأن واجهة API متاحة.'
+      );
+    }
+
     if (!response.ok) {
-      throw new Error(data.error || 'فشل تسجيل الدخول الاجتماعي');
+      throw new Error(data?.error || 'فشل تسجيل الدخول الاجتماعي');
     }
 
     setToken(data.token);
