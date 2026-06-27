@@ -4,8 +4,10 @@ services:
     env: node
     region: us-east
     plan: free
-    buildCommand: cd server && npm install && npx prisma generate
-    startCommand: cd server && npx prisma db push --skip-generate && npm start
+    rootDir: server
+    buildCommand: npm install && npx prisma generate
+    startCommand: npx prisma db push --skip-generate && npm start
+    healthCheckPath: /api/products
     envVars:
       - key: NODE_ENV
         value: production
