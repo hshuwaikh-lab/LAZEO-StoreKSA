@@ -1,7 +1,24 @@
 // API Configuration
 // This file centralizes all API endpoints and can be easily updated
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const getDefaultApiBaseUrl = () => {
+  if (typeof window === 'undefined') {
+    return 'http://localhost:5000';
+  }
+
+  const { hostname } = window.location;
+  if (hostname.includes('github.io')) {
+    return 'https://lazeo-storeksa.onrender.com';
+  }
+
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:5000';
+  }
+
+  return 'https://lazeo-storeksa.onrender.com';
+};
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || getDefaultApiBaseUrl();
 
 // Helper function to build API URLs
 export const buildApiUrl = (endpoint) => {
