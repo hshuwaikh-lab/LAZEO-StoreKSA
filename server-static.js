@@ -9,10 +9,26 @@ const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 3000;
 
-// Try to find dist folder
-let DIST_DIR = path.join(__dirname, 'dist');
-if (!path.resolve(DIST_DIR)) {
-  DIST_DIR = path.join(__dirname, '..', 'dist');
+// Try multiple dist locations
+const possiblePaths = [
+  path.join(__dirname, 'dist'),                              // ./dist
+  path.resolve(__dirname, '..', 'dist'),                     // ../dist
+  path.resolve(__dirname, 'src', 'dist'),                    // ./src/dist
+  path.resolve(__dirname, '..', 'src', 'dist'),              // ../src/dist
+  path.resolve('/opt/render/project/src/dist'),              // Render path
+  path.resolve('/opt/render/project/dist'),                  // Render root path
+];
+
+let DIST_DIR = '';
+for (const p of possiblePaths) {
+  try {
+    if (path.resolve(p)) {
+      DIST_DIR = p;
+      break;
+    }
+  } catch (e) {
+    continue;
+  }
 }
 
 const app = express();
