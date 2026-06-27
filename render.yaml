@@ -9,11 +9,15 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 5000
       - key: JWT_SECRET
-        value: lazeo_production_secret_key_2026
+        sync: false
       - key: DATABASE_URL
-        value: file:./prisma/dev.db
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: lazeo-uploads
       - key: CORS_ORIGIN
-        value: https://lazeo-storeksa.vercel.app
+        value: https://hshuwaikh-lab.github.io
