@@ -9,7 +9,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "concurrently \"npm run dev\" \"cd server && node index.js\"",
+    "start": "npm run dev",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
   },
