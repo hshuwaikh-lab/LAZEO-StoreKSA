@@ -8,6 +8,10 @@ const mapFirebaseAuthError = (error) => {
   const code = typeof error === 'string' ? error : error?.code;
   if (!code) return (error && error.message) || 'حدث خطأ في المصادقة';
   switch (code) {
+    case 'auth/unauthorized-domain': {
+      const domain = typeof window !== 'undefined' && window.location?.hostname ? window.location.hostname : 'this domain';
+      return `Firebase Error: هذا الدومين غير مسموح به في تسجيل الدخول. أضف ${domain} إلى Authorized domains في Firebase Console ثم أعد المحاولة.`;
+    }
     case 'auth/operation-not-allowed':
       return 'Firebase Error: تسجيل البريد/كلمة المرور غير مفعل. فعّل Email/Password في Firebase Console.';
     case 'auth/email-already-in-use':
