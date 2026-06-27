@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
@@ -12,10 +12,40 @@ const Login = () => {
   const [error, setError] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   
-  const { login, register, loginWithGoogle, loginWithApple } = useContext(AuthContext);
+  const [socialLoading, setSocialLoading] = useState(false);
+
+  const { login, register, startSocialLogin, completeSocialLogin } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from || '/';
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const completeOAuthIfNeeded = async () => {
+      try {
+        const user = await completeSocialLogin();
+        if (!isMounted || !user) return;
+
+        if (user.role === 'admin') {
+          navigate('/admin');
+        } else {
+          navigate(from);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(err?.message || err || 'حدث خطأ أثناء تسجيل الدخول الاجتماعي');
+        }
+      }
+    };
+
+    completeOAuthIfNeeded();
+
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,8 +53,6 @@ const Login = () => {
     try {
       if (isRegistering) {
         await register(username, email, password);
-        // Switch to login after successful register, or auto-login
-        await login(email, password);
         navigate(from);
       } else {
         const user = await login(email, password);
@@ -62,18 +90,12 @@ const Login = () => {
 
   const handleSocialLogin = async (provider) => {
     setError(null);
+    setSocialLoading(true);
     try {
-      const user = provider === 'google'
-        ? await loginWithGoogle()
-        : await loginWithApple();
-
-      if (user?.role === 'admin') {
-        navigate('/admin');
-      } else {
-        navigate(from);
-      }
+      await startSocialLogin(provider);
     } catch (err) {
       setError(err?.message || err || 'حدث خطأ أثناء تسجيل الدخول الاجتماعي');
+      setSocialLoading(false);
     }
   };
 
@@ -142,14 +164,24 @@ const Login = () => {
 
         <div className="divider">أو</div>
 
-        <button className="btn-outline google-btn w-full" type="button" onClick={() => handleSocialLogin('google')}>
+        <button
+          className="btn-outline google-btn w-full"
+          type="button"
+          onClick={() => handleSocialLogin('google')}
+          disabled={socialLoading}
+        >
           <img src="https://img.icons8.com/color/24/000000/google-logo.png" alt="Google" />
-          الدخول / التسجيل باستخدام Google
+          {socialLoading ? 'جاري التحويل...' : 'الدخول / التسجيل باستخدام Google'}
         </button>
 
-        <button className="btn-outline apple-btn w-full" type="button" onClick={() => handleSocialLogin('apple')}>
+        <button
+          className="btn-outline apple-btn w-full"
+          type="button"
+          onClick={() => handleSocialLogin('apple')}
+          disabled={socialLoading}
+        >
           <img src="https://img.icons8.com/ios-filled/24/000000/apple-logo.png" alt="Apple" />
-          الدخول / التسجيل باستخدام Apple
+          {socialLoading ? 'جاري التحويل...' : 'الدخول / التسجيل باستخدام Apple'}
         </button>
 
         <div className="toggle-register">

@@ -13,14 +13,9 @@ try {
 }
 
 const envVars = {
-    "VITE_FIREBASE_API_KEY": "AIzaSyCnFRivCXPgIHJfgqjHuCENZCCOQK49hFY",
-    "VITE_FIREBASE_AUTH_DOMAIN": "laszeo-store-ksa.firebaseapp.com",
-    "VITE_FIREBASE_PROJECT_ID": "laszeo-store-ksa",
-    "VITE_FIREBASE_STORAGE_BUCKET": "laszeo-store-ksa.firebasestorage.app",
-    "VITE_FIREBASE_MESSAGING_SENDER_ID": "111955440984",
-    "VITE_FIREBASE_APP_ID": "1:111955440984:web:aa196a06c398e3688c212d",
-    "VITE_FIREBASE_MEASUREMENT_ID": "G-2ND5W5GNKJ",
-    "VITE_API_BASE_URL": "http://localhost:5000"
+    "VITE_API_BASE_URL": "http://localhost:5000",
+    "VITE_SUPABASE_URL": "https://hslolngigrxwviklahme.supabase.co",
+    "VITE_SUPABASE_ANON_KEY": "YOUR_SUPABASE_ANON_KEY"
 };
 
 console.log('Environment variables configured locally.');
