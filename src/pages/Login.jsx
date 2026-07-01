@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
@@ -9,50 +9,21 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [phone, setPhone] = useState('');
   const [error, setError] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
-  
-  const [socialLoading, setSocialLoading] = useState(false);
 
-  const { login, register, startSocialLogin, completeSocialLogin } = useContext(AuthContext);
+  const { login, register } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from || '/';
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const completeOAuthIfNeeded = async () => {
-      try {
-        const user = await completeSocialLogin();
-        if (!isMounted || !user) return;
-
-        if (user.role === 'admin') {
-          navigate('/admin');
-        } else {
-          navigate(from);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setError(err?.message || err || 'حدث خطأ أثناء تسجيل الدخول الاجتماعي');
-        }
-      }
-    };
-
-    completeOAuthIfNeeded();
-
-    return () => {
-      isMounted = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
     try {
       if (isRegistering) {
-        await register(username, email, password);
+        await register(username, email, password, 'customer', phone);
         navigate(from);
       } else {
         const user = await login(email, password);
@@ -75,7 +46,7 @@ const Login = () => {
       const res = await fetch(buildApiUrl(API_ENDPOINTS.FORGOT_PASSWORD), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phoneOrEmail })
+        body: JSON.stringify({ phone: phoneOrEmail, email: phoneOrEmail })
       });
       const data = await res.json();
       if (res.ok) {
@@ -88,17 +59,6 @@ const Login = () => {
     }
   };
 
-  const handleSocialLogin = async (provider) => {
-    setError(null);
-    setSocialLoading(true);
-    try {
-      await startSocialLogin(provider);
-    } catch (err) {
-      setError(err?.message || err || 'حدث خطأ أثناء تسجيل الدخول الاجتماعي');
-      setSocialLoading(false);
-    }
-  };
-
   return (
     <div className="login-container">
       <div className="login-card">
@@ -108,6 +68,7 @@ const Login = () => {
 
         <form onSubmit={handleSubmit} className="login-form">
           {isRegistering && (
+            <>
             <div className="input-group">
               <label>الاسم الكامل</label>
               <input 
@@ -117,6 +78,16 @@ const Login = () => {
                 required 
               />
             </div>
+            <div className="input-group">
+              <label>رقم الجوال</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="05xxxxxxxx"
+              />
+            </div>
+            </>
           )}
 
           <div className="input-group">
@@ -161,28 +132,6 @@ const Login = () => {
             {isRegistering ? 'تسجيل' : 'دخول'}
           </button>
         </form>
-
-        <div className="divider">أو</div>
-
-        <button
-          className="btn-outline google-btn w-full"
-          type="button"
-          onClick={() => handleSocialLogin('google')}
-          disabled={socialLoading}
-        >
-          <img src="https://img.icons8.com/color/24/000000/google-logo.png" alt="Google" />
-          {socialLoading ? 'جاري التحويل...' : 'الدخول / التسجيل باستخدام Google'}
-        </button>
-
-        <button
-          className="btn-outline apple-btn w-full"
-          type="button"
-          onClick={() => handleSocialLogin('apple')}
-          disabled={socialLoading}
-        >
-          <img src="https://img.icons8.com/ios-filled/24/000000/apple-logo.png" alt="Apple" />
-          {socialLoading ? 'جاري التحويل...' : 'الدخول / التسجيل باستخدام Apple'}
-        </button>
 
         <div className="toggle-register">
           {isRegistering ? 'تتملك حساب مسبقاً؟ ' : 'ليس لديك حساب بعد؟ '}

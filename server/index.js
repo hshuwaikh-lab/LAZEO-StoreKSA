@@ -71,6 +71,21 @@ function buildSafeFileName(originalName) {
   return `${Date.now()}-${baseName || 'file'}${extension}`;
 }
 
+function shouldFallbackToLocalStorage(error) {
+  if (!error) return false;
+
+  const statusCode = String(error.statusCode || error.status || '');
+  const message = String(error.message || '').toLowerCase();
+  return statusCode === '404' || message.includes('bucket not found') || message.includes('not found');
+}
+
+async function uploadFileToLocal(req, fileName) {
+  const localPath = path.join(uploadsDir, fileName);
+  await fs.promises.writeFile(localPath, req.file.buffer);
+  const localUrl = `${req.protocol}://${req.get('host')}/uploads/${fileName}`;
+  return localUrl;
+}
+
 function extractSupabaseStoragePath(fileUrl) {
   if (!isSupabaseEnabled || !fileUrl) return null;
 
@@ -136,11 +151,25 @@ async function ensureAdminUser() {
 
 // Register Endpoint
 app.post('/api/auth/register', async (req, res) => {
-  const { username, email, password, role, receiveWhatsApp } = req.body;
+  const { username, email, password, role, receiveWhatsApp, phone } = req.body;
   try {
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const normalizedPhone = typeof phone === 'string' ? phone.trim() : '';
+
+    if (!normalizedEmail) {
+      return res.status(400).json({ error: 'البريد الإلكتروني مطلوب' });
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (existingUser) {
       return res.status(400).json({ error: 'البريد الإلكتروني مسجل مسبقاً' });
+    }
+
+    if (normalizedPhone) {
+      const existingPhoneUser = await prisma.user.findFirst({ where: { phone: normalizedPhone } });
+      if (existingPhoneUser) {
+        return res.status(400).json({ error: 'رقم الجوال مسجل مسبقاً' });
+      }
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -156,7 +185,8 @@ app.post('/api/auth/register', async (req, res) => {
     const newUser = await prisma.user.create({
       data: {
         username,
-        email,
+        email: normalizedEmail,
+        phone: normalizedPhone || null,
         password: hashedPassword,
         role: userRole,
         receiveWhatsApp: receiveWhatsApp !== undefined ? receiveWhatsApp : true
@@ -172,9 +202,22 @@ app.post('/api/auth/register', async (req, res) => {
 
 // Login Endpoint
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, phone, password } = req.body;
   try {
-    const user = await prisma.user.findUnique({ where: { email } });
+    const identifier = typeof (email || phone) === 'string' ? (email || phone).trim() : '';
+    if (!identifier || !password) {
+      return res.status(400).json({ error: 'أدخل البريد الإلكتروني أو رقم الجوال وكلمة المرور' });
+    }
+
+    const normalizedEmail = identifier.includes('@') ? identifier.toLowerCase() : identifier;
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: normalizedEmail },
+          { phone: identifier }
+        ]
+      }
+    });
     if (!user) {
       return res.status(400).json({ error: 'بيانات الدخول غير صحيحة' });
     }
@@ -240,10 +283,23 @@ app.post('/api/auth/social-login', async (req, res) => {
 
 // Forgot Password Endpoint
 app.post('/api/auth/forgot-password', async (req, res) => {
-  const { phone } = req.body;
+  const { phone, email } = req.body;
   try {
-    const user = await prisma.user.findFirst({ where: { phone } });
-    if (!user) return res.status(404).json({ error: 'رقم الجوال غير مسجل' });
+    const identifier = typeof (phone || email) === 'string' ? (phone || email).trim() : '';
+    if (!identifier) {
+      return res.status(400).json({ error: 'أدخل رقم الجوال أو البريد الإلكتروني' });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { phone: identifier },
+          { email: identifier.toLowerCase() }
+        ]
+      }
+    });
+
+    if (!user) return res.status(404).json({ error: 'رقم الجوال أو البريد الإلكتروني غير مسجل' });
     
     const tempPassword = Math.random().toString(36).slice(-8);
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
@@ -253,8 +309,8 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       data: { password: hashedPassword }
     });
     
-    // TODO: Send tempPassword via WhatsApp (Requires WhatsApp API integration)
-    console.log(`Sending WhatsApp to ${phone}: كلمة المرور الجديدة الخاصة بك هي: ${tempPassword}`);
+    // TODO: Send tempPassword via WhatsApp/Email provider integration
+    console.log(`Password reset for ${identifier}: كلمة المرور الجديدة الخاصة بك هي: ${tempPassword}`);
     
     res.json({ message: 'تم إرسال كلمة المرور الجديدة إلى الواتساب الخاص بك' });
   } catch (error) {
@@ -311,9 +367,9 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req, re
     return res.status(400).json({ error: 'لم يتم إرفاق ملف' });
   }
 
-  try {
-    const fileName = buildSafeFileName(req.file.originalname);
+  const fileName = buildSafeFileName(req.file.originalname);
 
+  try {
     if (isSupabaseEnabled) {
       const filePath = `uploads/${fileName}`;
       const { error: uploadError } = await supabase.storage
@@ -334,11 +390,22 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req, re
       return res.json({ url: data.publicUrl });
     }
 
-    const localPath = path.join(uploadsDir, fileName);
-    await fs.promises.writeFile(localPath, req.file.buffer);
-    const localUrl = `${req.protocol}://${req.get('host')}/uploads/${fileName}`;
+    const localUrl = await uploadFileToLocal(req, fileName);
     return res.json({ url: localUrl });
   } catch (error) {
+    if (shouldFallbackToLocalStorage(error)) {
+      try {
+        const localUrl = await uploadFileToLocal(req, fileName);
+        return res.json({
+          url: localUrl,
+          storageMode: 'local-fallback',
+          warning: 'تعذر الرفع إلى Supabase Storage، تم الحفظ محلياً.'
+        });
+      } catch (localError) {
+        console.error('Local fallback upload failed:', localError);
+      }
+    }
+
     console.error('Upload failed:', error);
     return res.status(500).json({ error: 'فشل رفع الملف' });
   }

@@ -83,11 +83,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (username, email, password, role = 'customer') => {
+  const register = async (username, email, password, role = 'customer', phone = '') => {
     try {
       const response = await apiCall(API_ENDPOINTS.REGISTER, {
         method: 'POST',
-        body: JSON.stringify({ username, email, password, role }),
+        body: JSON.stringify({ username, email, password, role, phone }),
       });
 
       const data = await response.json();

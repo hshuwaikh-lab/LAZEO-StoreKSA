@@ -6,6 +6,7 @@ import './Footer.css';
 const Footer = () => {
   const { t } = useTranslation();
   const [settings, setSettings] = useState({});
+  const logoUrl = `${import.meta.env.BASE_URL}logo.png`;
 
   useEffect(() => {
     fetch(buildApiUrl(API_ENDPOINTS.SETTINGS))
@@ -18,7 +19,7 @@ const Footer = () => {
     <footer className="footer glass">
       <div className="container footer-content">
         <div className="footer-brand">
-          <img src="/logo.png" alt="LAZEO Logo" style={{height: '60px', width: 'auto', objectFit: 'contain', marginBottom: '1rem'}} />
+          <img src={logoUrl} alt="LAZEO Logo" style={{height: '60px', width: 'auto', objectFit: 'contain', marginBottom: '1rem'}} />
           <p>{t('hero_subtitle')}</p>
           <div style={{ display: 'flex', gap: '15px', marginTop: '1rem', justifyContent: 'center' }}>
             {settings.whatsappNumber && (

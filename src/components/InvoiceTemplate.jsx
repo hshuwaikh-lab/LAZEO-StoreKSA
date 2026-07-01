@@ -2,6 +2,7 @@ import React, { forwardRef } from 'react';
 
 const InvoiceTemplate = forwardRef(({ order }, ref) => {
   if (!order) return null;
+  const logoUrl = `${import.meta.env.BASE_URL}logo.png`;
 
   let items = [];
   try {
@@ -27,7 +28,7 @@ const InvoiceTemplate = forwardRef(({ order }, ref) => {
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '20px', marginBottom: '30px' }}>
           <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <img src="/logo.png" alt="LAZEO Logo" style={{ height: '70px', objectFit: 'contain' }} crossOrigin="anonymous" />
+            <img src={logoUrl} alt="LAZEO Logo" style={{ height: '70px', objectFit: 'contain' }} crossOrigin="anonymous" />
             <div>
               <h1 style={{ margin: 0, fontSize: '28px', color: '#000', fontWeight: 'bold' }}>LAZEO StoreKSA</h1>
               <p style={{ margin: '5px 0', fontSize: '14px', color: '#555' }}>متجر متخصص في أعمال القص بالليزر</p>
