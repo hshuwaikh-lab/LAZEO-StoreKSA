@@ -196,7 +196,11 @@ app.post('/api/auth/register', async (req, res) => {
     res.status(201).json({ message: 'تم إنشاء الحساب بنجاح', user: { id: newUser.id, role: newUser.role } });
   } catch (error) {
     console.error('Login endpoint error:', error);
-    res.status(500).json({ error: 'حدث خطأ في السيرفر' });
+    res.status(500).json({
+      error: 'حدث خطأ في السيرفر',
+      detail: error?.code || error?.name || 'UnknownError',
+      ...(process.env.NODE_ENV !== 'production' ? { message: error?.message } : {})
+    });
   }
 });
 
@@ -418,7 +422,11 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
     res.json(user);
   } catch (error) {
     console.error('Settings endpoint error:', error);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({
+      error: 'Server error',
+      detail: error?.code || error?.name || 'UnknownError',
+      ...(process.env.NODE_ENV !== 'production' ? { message: error?.message } : {})
+    });
   }
 });
 
