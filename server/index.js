@@ -149,6 +149,21 @@ async function ensureAdminUser() {
   }
 }
 
+async function logDatabaseConnectionStatus() {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('Database connectivity check: OK');
+  } catch (error) {
+    console.error('Database connectivity check failed:', {
+      name: error?.name,
+      code: error?.code,
+      message: error?.message,
+      meta: error?.meta,
+      clientVersion: error?.clientVersion
+    });
+  }
+}
+
 // Register Endpoint
 app.post('/api/auth/register', async (req, res) => {
   const { username, email, password, role, receiveWhatsApp, phone } = req.body;
@@ -953,6 +968,7 @@ app.use((err, req, res, next) => {
 });
 
 ensureAdminUser().then(() => {
+  logDatabaseConnectionStatus();
   app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
   });
