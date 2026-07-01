@@ -8,14 +8,14 @@ const getDefaultApiBaseUrl = () => {
 
   const { hostname } = window.location;
   if (hostname.includes('github.io')) {
-    return 'https://lazeo-storeksa-api.onrender.com';
+    return 'https://lazeo-storeksa-1.onrender.com';
   }
 
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return 'http://localhost:5000';
   }
 
-  return 'https://lazeo-storeksa-api.onrender.com';
+  return 'https://lazeo-storeksa-1.onrender.com';
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || getDefaultApiBaseUrl();
