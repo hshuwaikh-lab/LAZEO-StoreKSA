@@ -27,3 +27,7 @@ dist-ssr
 
 .vercel
 .env*
+
+# Local runtime uploads
+server/uploads/*
+!server/uploads/.gitkeep
