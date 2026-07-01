@@ -639,20 +639,16 @@ const AdminDashboard = () => {
 
         {storageHealth && (
           <div
+            className="storage-health-card"
             style={{
               marginBottom: '16px',
               border: `1px solid ${storageHealth.ok ? '#bbf7d0' : '#fecaca'}`,
               background: storageHealth.ok ? '#f0fdf4' : '#fef2f2',
               borderRadius: '10px',
               padding: '12px 14px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              gap: '10px',
-              alignItems: 'center',
-              flexWrap: 'wrap'
             }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div className="storage-health-copy" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <strong>حالة التخزين: {storageHealth.ok ? 'جاهز' : 'يوجد مشكلة'}</strong>
               <span style={{ fontSize: '0.9rem' }}>
                 الوضع: {storageHealth.mode || '-'} | المزود: {storageHealth.provider || '-'} | الحد الأقصى: {storageHealth.maxUploadSizeMb ? `${storageHealth.maxUploadSizeMb}MB` : '-'}
@@ -669,7 +665,7 @@ const AdminDashboard = () => {
                 </span>
               )}
             </div>
-            <button type="button" className="btn-secondary" onClick={handleCheckStorageHealth} disabled={checkingStorageHealth} style={{ padding: '8px 16px' }}>
+            <button type="button" className="btn-secondary storage-health-action" onClick={handleCheckStorageHealth} disabled={checkingStorageHealth} style={{ padding: '8px 16px' }}>
               {checkingStorageHealth ? 'جاري الفحص...' : 'تحديث الحالة'}
             </button>
           </div>
