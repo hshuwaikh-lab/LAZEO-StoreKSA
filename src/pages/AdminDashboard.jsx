@@ -16,6 +16,14 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [printingOrder, setPrintingOrder] = useState(null);
   const invoiceRef = useRef(null);
+  const sessionExpiredRef = useRef(false);
+
+  const handleSessionExpired = useCallback(async () => {
+    if (sessionExpiredRef.current) return;
+    sessionExpiredRef.current = true;
+    await logout();
+    navigate('/login', { replace: true });
+  }, [logout, navigate]);
 
   const fetchData = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -231,17 +239,25 @@ const AdminDashboard = () => {
 
           if (!res.ok) {
             const isAuthError = res.status === 401 || res.status === 403;
+            const rawErrorMessage = String(result.message || result.error || '').toLowerCase();
+            const tokenExpired = isAuthError && rawErrorMessage.includes('jwt expired');
             setStorageHealth({
               ok: false,
               mode: result.mode || 'api-error',
               provider: result.provider || '-',
               maxUploadSizeMb: result.maxUploadSizeMb || null,
-              message: result.message || (isAuthError ? 'انتهت صلاحية الجلسة. يرجى تسجيل الدخول مرة أخرى.' : `فشل فحص التخزين (HTTP ${res.status})`),
+              message: isAuthError
+                ? 'انتهت صلاحية الجلسة. يرجى تسجيل الدخول مرة أخرى.'
+                : (result.message || `فشل فحص التخزين (HTTP ${res.status})`),
               error: result.error || null,
               statusCode: res.status,
               source: targetUrl
             });
             setStorageLastCheckedAt(new Date());
+
+            if (tokenExpired) {
+              await handleSessionExpired();
+            }
             return;
           }
 
@@ -269,7 +285,7 @@ const AdminDashboard = () => {
         setCheckingStorageHealth(false);
       }
     }
-  }, []);
+  }, [handleSessionExpired]);
 
   useEffect(() => {
     fetchStorageHealth(false);
