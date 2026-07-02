@@ -17,6 +17,8 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [printingOrder, setPrintingOrder] = useState(null);
   const invoiceRef = useRef(null);
+  const shippingImportInputRef = useRef(null);
+  const banksImportInputRef = useRef(null);
   const sessionExpiredRef = useRef(false);
 
   const handleSessionExpired = useCallback(async () => {
@@ -416,6 +418,216 @@ const AdminDashboard = () => {
       }
     } catch {
       alert('حدث خطأ أثناء الاتصال');
+    }
+  };
+
+  const downloadJsonFile = (payload, fileName) => {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const readJsonFile = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || '{}'));
+        resolve(parsed);
+      } catch (error) {
+        reject(new Error('الملف ليس JSON صالح'));
+      }
+    };
+    reader.onerror = () => reject(new Error('تعذر قراءة الملف'));
+    reader.readAsText(file);
+  });
+
+  const exportShippingToJson = () => {
+    if (!data.shipping.length) {
+      alert('لا توجد بيانات شحن للتصدير');
+      return;
+    }
+
+    const payload = {
+      type: 'shipping-methods',
+      exportedAt: new Date().toISOString(),
+      count: data.shipping.length,
+      items: data.shipping.map((s) => ({
+        id: s.id,
+        name: s.name,
+        price: s.price,
+        estimatedDays: s.estimatedDays,
+        logoUrl: s.logoUrl || null
+      }))
+    };
+
+    downloadJsonFile(payload, `shipping-methods-${new Date().toISOString().slice(0, 10)}.json`);
+  };
+
+  const exportBanksToJson = () => {
+    if (!data.banks.length) {
+      alert('لا توجد بيانات بنوك للتصدير');
+      return;
+    }
+
+    const payload = {
+      type: 'bank-accounts',
+      exportedAt: new Date().toISOString(),
+      count: data.banks.length,
+      items: data.banks.map((b) => ({
+        id: b.id,
+        bankName: b.bankName,
+        accountName: b.accountName,
+        accountNumber: b.accountNumber,
+        iban: b.iban,
+        logoUrl: b.logoUrl || null
+      }))
+    };
+
+    downloadJsonFile(payload, `bank-accounts-${new Date().toISOString().slice(0, 10)}.json`);
+  };
+
+  const importShippingFromJson = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('يرجى تسجيل الدخول مرة أخرى');
+      return;
+    }
+
+    try {
+      const parsed = await readJsonFile(file);
+      const items = Array.isArray(parsed?.items) ? parsed.items : [];
+
+      if (!items.length) {
+        alert('الملف لا يحتوي على بيانات شحن');
+        return;
+      }
+
+      const existingById = new Map(data.shipping.map((s) => [Number(s.id), s]));
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
+
+      for (const item of items) {
+        const normalized = {
+          name: String(item?.name || '').trim(),
+          price: Number(item?.price || 0),
+          estimatedDays: String(item?.estimatedDays || '').trim(),
+          logoUrl: item?.logoUrl ? String(item.logoUrl).trim() : null
+        };
+
+        if (!normalized.name || !normalized.estimatedDays || !Number.isFinite(normalized.price) || normalized.price < 0) {
+          skipped += 1;
+          continue;
+        }
+
+        const parsedId = Number(item?.id);
+        const hasExisting = Number.isFinite(parsedId) && existingById.has(parsedId);
+        const method = hasExisting ? 'PUT' : 'POST';
+        const endpoint = hasExisting
+          ? API_ENDPOINTS.ADMIN_SHIPPING_DETAIL(parsedId)
+          : API_ENDPOINTS.ADMIN_SHIPPING;
+
+        const res = await fetch(buildApiUrl(endpoint), {
+          method,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(normalized)
+        });
+
+        if (res.ok) {
+          if (hasExisting) updated += 1;
+          else created += 1;
+        } else {
+          skipped += 1;
+        }
+      }
+
+      await fetchData();
+      alert(`تم استيراد بيانات الشحن بنجاح\nمضاف: ${created}\nمحدث: ${updated}\nمتجاوز: ${skipped}`);
+    } catch (error) {
+      alert(error.message || 'فشل استيراد بيانات الشحن');
+    }
+  };
+
+  const importBanksFromJson = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('يرجى تسجيل الدخول مرة أخرى');
+      return;
+    }
+
+    try {
+      const parsed = await readJsonFile(file);
+      const items = Array.isArray(parsed?.items) ? parsed.items : [];
+
+      if (!items.length) {
+        alert('الملف لا يحتوي على بيانات بنوك');
+        return;
+      }
+
+      const existingById = new Map(data.banks.map((b) => [Number(b.id), b]));
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
+
+      for (const item of items) {
+        const normalized = {
+          bankName: String(item?.bankName || '').trim(),
+          accountName: String(item?.accountName || '').trim(),
+          accountNumber: String(item?.accountNumber || '').trim(),
+          iban: String(item?.iban || '').trim(),
+          logoUrl: item?.logoUrl ? String(item.logoUrl).trim() : null
+        };
+
+        if (!normalized.bankName || !normalized.accountName || !normalized.accountNumber || !normalized.iban) {
+          skipped += 1;
+          continue;
+        }
+
+        const parsedId = Number(item?.id);
+        const hasExisting = Number.isFinite(parsedId) && existingById.has(parsedId);
+        const method = hasExisting ? 'PUT' : 'POST';
+        const endpoint = hasExisting
+          ? API_ENDPOINTS.ADMIN_BANKS_DETAIL(parsedId)
+          : API_ENDPOINTS.ADMIN_BANKS;
+
+        const res = await fetch(buildApiUrl(endpoint), {
+          method,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(normalized)
+        });
+
+        if (res.ok) {
+          if (hasExisting) updated += 1;
+          else created += 1;
+        } else {
+          skipped += 1;
+        }
+      }
+
+      await fetchData();
+      alert(`تم استيراد بيانات البنوك بنجاح\nمضاف: ${created}\nمحدث: ${updated}\nمتجاوز: ${skipped}`);
+    } catch (error) {
+      alert(error.message || 'فشل استيراد بيانات البنوك');
     }
   };
 
@@ -968,6 +1180,17 @@ const AdminDashboard = () => {
 
             {activeTab === 'shipping' && (
               <div>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                  <button type="button" className="btn-secondary" onClick={exportShippingToJson}>تصدير الشحن (JSON)</button>
+                  <button type="button" className="btn-secondary" onClick={() => shippingImportInputRef.current?.click()}>استيراد الشحن (JSON)</button>
+                  <input
+                    ref={shippingImportInputRef}
+                    type="file"
+                    accept="application/json,.json"
+                    onChange={importShippingFromJson}
+                    style={{ display: 'none' }}
+                  />
+                </div>
                 <form onSubmit={handleSaveShipping} style={{ display: 'flex', gap: '10px', marginBottom: '20px', alignItems: 'center' }}>
                   <input type="text" placeholder="اسم الشركة" required value={newShipping.name} onChange={e => setNewShipping({...newShipping, name: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
                   <input type="number" placeholder="السعر" required value={newShipping.price} onChange={e => setNewShipping({...newShipping, price: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
@@ -1019,6 +1242,17 @@ const AdminDashboard = () => {
 
             {activeTab === 'banks' && (
               <div>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                  <button type="button" className="btn-secondary" onClick={exportBanksToJson}>تصدير البنوك (JSON)</button>
+                  <button type="button" className="btn-secondary" onClick={() => banksImportInputRef.current?.click()}>استيراد البنوك (JSON)</button>
+                  <input
+                    ref={banksImportInputRef}
+                    type="file"
+                    accept="application/json,.json"
+                    onChange={importBanksFromJson}
+                    style={{ display: 'none' }}
+                  />
+                </div>
                 <form onSubmit={handleSaveBank} style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
                   <input type="text" placeholder="اسم البنك" required value={newBank.bankName} onChange={e => setNewBank({...newBank, bankName: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
                   <input type="text" placeholder="اسم الحساب" required value={newBank.accountName} onChange={e => setNewBank({...newBank, accountName: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
