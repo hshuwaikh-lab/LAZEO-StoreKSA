@@ -1,7 +1,7 @@
 import React, { useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { buildApiUrl, API_ENDPOINTS } from '../config/api';
+import { buildApiUrl, API_ENDPOINTS, API_BASE_URL } from '../config/api';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import ExcelJS from 'exceljs';
@@ -200,49 +200,68 @@ const AdminDashboard = () => {
       setCheckingStorageHealth(true);
     }
 
+    const urlsToTry = [buildApiUrl(API_ENDPOINTS.ADMIN_STORAGE_HEALTH)];
+    if (typeof window !== 'undefined') {
+      const sameOriginUrl = new URL(API_ENDPOINTS.ADMIN_STORAGE_HEALTH, window.location.origin).toString();
+      if (!urlsToTry.includes(sameOriginUrl)) {
+        urlsToTry.push(sameOriginUrl);
+      }
+    }
+
+    let lastError = null;
+
     try {
-      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_STORAGE_HEALTH), {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      for (const targetUrl of urlsToTry) {
+        try {
+          const res = await fetch(targetUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
 
-      const contentType = res.headers.get('content-type') || '';
-      let result = {};
+          const contentType = res.headers.get('content-type') || '';
+          let result = {};
 
-      if (contentType.includes('application/json')) {
-        result = await res.json();
-      } else {
-        const text = await res.text();
-        if (text) {
-          result = { message: text };
+          if (contentType.includes('application/json')) {
+            result = await res.json();
+          } else {
+            const text = await res.text();
+            if (text) {
+              result = { message: text };
+            }
+          }
+
+          if (!res.ok) {
+            const isAuthError = res.status === 401 || res.status === 403;
+            setStorageHealth({
+              ok: false,
+              mode: result.mode || 'api-error',
+              provider: result.provider || '-',
+              maxUploadSizeMb: result.maxUploadSizeMb || null,
+              message: result.message || (isAuthError ? 'انتهت صلاحية الجلسة. يرجى تسجيل الدخول مرة أخرى.' : `فشل فحص التخزين (HTTP ${res.status})`),
+              error: result.error || null,
+              statusCode: res.status,
+              source: targetUrl
+            });
+            setStorageLastCheckedAt(new Date());
+            return;
+          }
+
+          setStorageHealth({ ...result, statusCode: res.status, source: targetUrl });
+          setStorageLastCheckedAt(new Date());
+          return;
+        } catch (error) {
+          lastError = error;
         }
       }
 
-      if (!res.ok) {
-        const isAuthError = res.status === 401 || res.status === 403;
-        setStorageHealth({
-          ok: false,
-          mode: result.mode || 'api-error',
-          provider: result.provider || '-',
-          maxUploadSizeMb: result.maxUploadSizeMb || null,
-          message: result.message || (isAuthError ? 'انتهت صلاحية الجلسة. يرجى تسجيل الدخول مرة أخرى.' : `فشل فحص التخزين (HTTP ${res.status})`),
-          error: result.error || null,
-          statusCode: res.status
-        });
-        setStorageLastCheckedAt(new Date());
-        return;
-      }
-
-      setStorageHealth({ ...result, statusCode: res.status });
-      setStorageLastCheckedAt(new Date());
-    } catch (error) {
       setStorageHealth({
         ok: false,
         mode: 'request-failed',
-        provider: '-',
-        maxUploadSizeMb: null,
+        provider: 'local',
+        maxUploadSizeMb: 10,
         message: 'تعذر الاتصال بخدمة فحص التخزين',
-        error: error.message,
-        statusCode: 0
+        error: lastError?.message || `تعذر الاتصال بأي مسار API متاح (${API_BASE_URL})`,
+        statusCode: 0,
+        source: 'none'
       });
       setStorageLastCheckedAt(new Date());
     } finally {
