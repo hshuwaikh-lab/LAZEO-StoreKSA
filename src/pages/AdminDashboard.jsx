@@ -1197,6 +1197,8 @@ const AdminDashboard = () => {
                   <input type="text" placeholder="المدة المتوقعة" required value={newShipping.estimatedDays} onChange={e => setNewShipping({...newShipping, estimatedDays: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
                   <input type="file" accept="image/*" onChange={e => setShippingLogoFile(e.target.files[0])} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} title="شعار الشحن (اختياري)" />
                   <button type="submit" className="btn-primary" style={{ padding: '8px 16px' }}>{editingShippingId ? 'تحديث الشحن' : 'إضافة'}</button>
+                  <button type="button" className="btn-secondary" style={{ padding: '8px 16px' }} onClick={exportShippingToJson}>تصدير JSON</button>
+                  <button type="button" className="btn-secondary" style={{ padding: '8px 16px' }} onClick={() => shippingImportInputRef.current?.click()}>استيراد JSON</button>
                   {editingShippingId && <button type="button" className="btn-secondary" style={{ padding: '8px 16px' }} onClick={handleCancelEditShipping}>إلغاء</button>}
                 </form>
                 <table style={{ width: '100%', textAlign: 'right', borderCollapse: 'collapse' }}>
@@ -1260,6 +1262,8 @@ const AdminDashboard = () => {
                   <input type="text" placeholder="الآيبان IBAN" required value={newBank.iban} onChange={e => setNewBank({...newBank, iban: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', minWidth: '250px' }} />
                   <input type="file" accept="image/*" onChange={e => setBankLogoFile(e.target.files[0])} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} title="شعار البنك (اختياري لتغييره)" />
                   <button type="submit" className="btn-primary" style={{ padding: '8px 16px' }}>{editingBankId ? 'تحديث البنك' : 'إضافة'}</button>
+                  <button type="button" className="btn-secondary" style={{ padding: '8px 16px' }} onClick={exportBanksToJson}>تصدير JSON</button>
+                  <button type="button" className="btn-secondary" style={{ padding: '8px 16px' }} onClick={() => banksImportInputRef.current?.click()}>استيراد JSON</button>
                   {editingBankId && <button type="button" className="btn-secondary" style={{ padding: '8px 16px' }} onClick={handleCancelEditBank}>إلغاء</button>}
                 </form>
                 <table style={{ width: '100%', textAlign: 'right', borderCollapse: 'collapse' }}>
