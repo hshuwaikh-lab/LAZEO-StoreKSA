@@ -873,9 +873,14 @@ const AdminDashboard = () => {
               }}
             />
           </div>
-          <button onClick={handleLogout} className="btn-solid" style={{ background: '#ef4444', color: 'white', padding: '0.5rem 1rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer' }}>
-            تسجيل الخروج
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button onClick={() => navigate('/admin/desktop-program')} className="btn-secondary" style={{ padding: '0.5rem 1rem' }}>
+              برنامج الكمبيوتر
+            </button>
+            <button onClick={handleLogout} className="btn-solid" style={{ background: '#ef4444', color: 'white', padding: '0.5rem 1rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer' }}>
+              تسجيل الخروج
+            </button>
+          </div>
         </div>
 
         {storageHealth && (

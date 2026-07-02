@@ -9,6 +9,7 @@ import ProductDetails from './pages/ProductDetails';
 import Cart from './pages/Cart';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminDesktopProgram from './pages/AdminDesktopProgram';
 import Profile from './pages/Profile';
 import Checkout from './pages/Checkout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -51,6 +52,11 @@ function App() {
               <Route path="/admin" element={
                 <ProtectedRoute requireAdmin={true}>
                   <AdminDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin/desktop-program" element={
+                <ProtectedRoute requireAdmin={true}>
+                  <AdminDesktopProgram />
                 </ProtectedRoute>
               } />
             </Routes>
