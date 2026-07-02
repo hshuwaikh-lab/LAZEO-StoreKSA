@@ -204,12 +204,42 @@ const AdminDashboard = () => {
       const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_STORAGE_HEALTH), {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const result = await res.json();
+
+      const contentType = res.headers.get('content-type') || '';
+      let result = {};
+
+      if (contentType.includes('application/json')) {
+        result = await res.json();
+      } else {
+        const text = await res.text();
+        if (text) {
+          result = { message: text };
+        }
+      }
+
+      if (!res.ok) {
+        const isAuthError = res.status === 401 || res.status === 403;
+        setStorageHealth({
+          ok: false,
+          mode: result.mode || 'api-error',
+          provider: result.provider || '-',
+          maxUploadSizeMb: result.maxUploadSizeMb || null,
+          message: result.message || (isAuthError ? 'انتهت صلاحية الجلسة. يرجى تسجيل الدخول مرة أخرى.' : `فشل فحص التخزين (HTTP ${res.status})`),
+          error: result.error || null,
+          statusCode: res.status
+        });
+        setStorageLastCheckedAt(new Date());
+        return;
+      }
+
       setStorageHealth({ ...result, statusCode: res.status });
       setStorageLastCheckedAt(new Date());
     } catch (error) {
       setStorageHealth({
         ok: false,
+        mode: 'request-failed',
+        provider: '-',
+        maxUploadSizeMb: null,
         message: 'تعذر الاتصال بخدمة فحص التخزين',
         error: error.message,
         statusCode: 0
