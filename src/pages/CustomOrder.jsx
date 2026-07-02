@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
+import { uploadFileDirect } from '../utils/directUpload';
 
 const CustomOrder = () => {
   const { t, i18n } = useTranslation();
@@ -53,16 +54,8 @@ const CustomOrder = () => {
         alert('الرجاء إرفاق صورة التصميم');
         return;
       }
-      const formDataUpload = new FormData();
-      formDataUpload.append('file', file);
       try {
-        const uploadRes = await fetch(buildApiUrl(API_ENDPOINTS.UPLOAD), {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formDataUpload
-        });
-        if (!uploadRes.ok) throw new Error('Upload failed');
-        const uploadData = await uploadRes.json();
+        const uploadData = await uploadFileDirect({ token, file });
         finalAttachmentUrl = uploadData.url;
       } catch {
         alert('حدث خطأ أثناء رفع الصورة');

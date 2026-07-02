@@ -51,6 +51,7 @@ export const API_ENDPOINTS = {
   
   // Upload
   UPLOAD: '/api/upload',
+  UPLOAD_SIGNED_URL: '/api/upload/signed-url',
   
   // Custom Orders
   CUSTOM_ORDERS: '/api/custom-order',

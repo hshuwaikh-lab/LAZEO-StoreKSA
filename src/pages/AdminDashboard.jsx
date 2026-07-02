@@ -7,6 +7,7 @@ import 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
 import InvoiceTemplate from '../components/InvoiceTemplate';
+import { uploadFileDirect } from '../utils/directUpload';
 
 const AdminDashboard = () => {
   const { logout } = useContext(AuthContext);
@@ -439,21 +440,9 @@ const AdminDashboard = () => {
     
     let finalLogoUrl = newShipping.logoUrl;
     if (shippingLogoFile) {
-      const formData = new FormData();
-      formData.append('file', shippingLogoFile);
       try {
-        const uploadRes = await fetch(buildApiUrl(API_ENDPOINTS.UPLOAD), {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData
-        });
-        if (uploadRes.ok) {
-          const uploadData = await uploadRes.json();
-          finalLogoUrl = uploadData.url;
-        } else {
-          alert('فشل رفع شعار الشحن');
-          return;
-        }
+        const uploadData = await uploadFileDirect({ token, file: shippingLogoFile });
+        finalLogoUrl = uploadData.url;
       } catch {
         alert('حدث خطأ أثناء الرفع');
         return;
@@ -574,21 +563,9 @@ const AdminDashboard = () => {
 
     let imageUrl = newProduct.image;
     if (productImageFile) {
-      const formData = new FormData();
-      formData.append('file', productImageFile);
       try {
-        const uploadRes = await fetch(buildApiUrl(API_ENDPOINTS.UPLOAD), {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData
-        });
-        if (uploadRes.ok) {
-          const uploadData = await uploadRes.json();
-          imageUrl = uploadData.url;
-        } else {
-          alert('فشل رفع الصورة');
-          return;
-        }
+        const uploadData = await uploadFileDirect({ token, file: productImageFile });
+        imageUrl = uploadData.url;
       } catch {
         alert('حدث خطأ أثناء الرفع');
         return;
@@ -633,22 +610,9 @@ const AdminDashboard = () => {
 
     let logoUrl = null;
     if (bankLogoFile) {
-      const formData = new FormData();
-      formData.append('file', bankLogoFile);
       try {
-        const uploadRes = await fetch(buildApiUrl(API_ENDPOINTS.UPLOAD), {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData
-        });
-        if (uploadRes.ok) {
-          const uploadData = await uploadRes.json();
-          logoUrl = uploadData.url;
-        } else {
-          const text = await uploadRes.text();
-          alert('فشل رفع الشعار: ' + uploadRes.status + ' - ' + text);
-          return;
-        }
+        const uploadData = await uploadFileDirect({ token, file: bankLogoFile });
+        logoUrl = uploadData.url;
       } catch {
         alert('حدث خطأ أثناء الرفع');
         return;

@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { Copy } from 'lucide-react';
+import { uploadFileDirect } from '../utils/directUpload';
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -55,16 +56,8 @@ const Checkout = () => {
         alert('الرجاء إرفاق صورة الإيصال');
         return;
       }
-      const formData = new FormData();
-      formData.append('file', file);
       try {
-        const uploadRes = await fetch(buildApiUrl(API_ENDPOINTS.UPLOAD), {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData
-        });
-        if (!uploadRes.ok) throw new Error('Upload failed');
-        const uploadData = await uploadRes.json();
+        const uploadData = await uploadFileDirect({ token, file });
         finalReceiptUrl = uploadData.url;
       } catch {
         alert('حدث خطأ أثناء رفع الصورة');

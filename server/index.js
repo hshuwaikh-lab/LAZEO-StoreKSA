@@ -107,6 +107,28 @@ function shouldFallbackToLocalStorage(error) {
   return statusCode === '404' || message.includes('bucket not found') || message.includes('not found');
 }
 
+function isAllowedUpload(contentType, fileSize) {
+  const normalizedType = String(contentType || '').toLowerCase();
+  const normalizedSize = Number(fileSize || 0);
+
+  if (!allowedUploadMimeTypes.has(normalizedType)) {
+    return { ok: false, error: 'نوع الملف غير مدعوم' };
+  }
+
+  if (!Number.isFinite(normalizedSize) || normalizedSize <= 0) {
+    return { ok: false, error: 'حجم الملف غير صالح' };
+  }
+
+  if (normalizedSize > maxUploadSizeBytes) {
+    return {
+      ok: false,
+      error: `حجم الملف أكبر من الحد المسموح (${Math.round(maxUploadSizeBytes / (1024 * 1024))}MB)`
+    };
+  }
+
+  return { ok: true };
+}
+
 async function uploadFileToLocal(req, fileName) {
   const localPath = path.join(uploadsDir, fileName);
   await fs.promises.writeFile(localPath, req.file.buffer);
@@ -461,6 +483,54 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req, re
 
     console.error('Upload failed:', error);
     return res.status(500).json({ error: 'فشل رفع الملف' });
+  }
+});
+
+app.post('/api/upload/signed-url', authenticateToken, async (req, res) => {
+  const { fileName, contentType, fileSize } = req.body || {};
+
+  if (!isSupabaseEnabled) {
+    return res.status(503).json({
+      error: 'Supabase Storage غير مفعل على الخادم',
+      mode: 'local-fallback'
+    });
+  }
+
+  if (!fileName) {
+    return res.status(400).json({ error: 'اسم الملف مطلوب' });
+  }
+
+  const validation = isAllowedUpload(contentType, fileSize);
+  if (!validation.ok) {
+    return res.status(400).json({ error: validation.error });
+  }
+
+  const safeName = buildSafeFileName(fileName);
+  const storagePath = `uploads/${safeName}`;
+
+  try {
+    const { data, error } = await supabase.storage
+      .from(SUPABASE_STORAGE_BUCKET)
+      .createSignedUploadUrl(storagePath);
+
+    if (error) {
+      return res.status(500).json({ error: 'تعذر إنشاء رابط الرفع الموقّع', detail: error.message });
+    }
+
+    const { data: publicData } = supabase.storage
+      .from(SUPABASE_STORAGE_BUCKET)
+      .getPublicUrl(storagePath);
+
+    return res.json({
+      signedUrl: data.signedUrl,
+      token: data.token,
+      path: data.path || storagePath,
+      publicUrl: publicData.publicUrl,
+      bucket: SUPABASE_STORAGE_BUCKET,
+      provider: 'supabase'
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'فشل إنشاء رابط الرفع الموقّع', detail: error.message });
   }
 });
 
