@@ -595,6 +595,32 @@ app.get('/api/user/custom-orders', authenticateToken, async (req, res) => {
   }
 });
 
+app.put('/api/user/custom-orders/:id/accept', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const customOrder = await prisma.customOrder.findFirst({
+      where: { id: parseInt(id), userId: req.user.id }
+    });
+
+    if (!customOrder) {
+      return res.status(404).json({ error: 'الطلب غير موجود' });
+    }
+
+    if (customOrder.priceQuote == null) {
+      return res.status(400).json({ error: 'لم يتم تسعير الطلب بعد' });
+    }
+
+    const updated = await prisma.customOrder.update({
+      where: { id: parseInt(id) },
+      data: { status: 'accepted' }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // --- Admin Dashboard Routes ---
 app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
   try {

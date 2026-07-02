@@ -4,6 +4,7 @@ import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { uploadFileDirect } from '../utils/directUpload';
+import ActionBanner from '../components/ActionBanner';
 
 const CustomOrder = () => {
   const { t, i18n } = useTranslation();
@@ -36,11 +37,12 @@ const CustomOrder = () => {
   const [inputType, setInputType] = useState('image');
   const [file, setFile] = useState(null);
   const [attachmentText, setAttachmentText] = useState('');
+  const [feedback, setFeedback] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!user) {
-      alert('الرجاء تسجيل الدخول أولاً لتقديم طلب مخصص');
+      setFeedback({ type: 'error', title: 'تسجيل الدخول مطلوب', message: 'الرجاء تسجيل الدخول أولًا لتقديم طلب مخصص.' });
       navigate('/login');
       return;
     }
@@ -51,19 +53,19 @@ const CustomOrder = () => {
 
     if (inputType === 'image') {
       if (!file) {
-        alert('الرجاء إرفاق صورة التصميم');
+        setFeedback({ type: 'error', title: 'صورة التصميم مطلوبة', message: 'الرجاء إرفاق ملف التصميم قبل الإرسال.' });
         return;
       }
       try {
         const uploadData = await uploadFileDirect({ token, file });
         finalAttachmentUrl = uploadData.url;
       } catch {
-        alert('حدث خطأ أثناء رفع الصورة');
+        setFeedback({ type: 'error', title: 'فشل رفع الملف', message: 'حدث خطأ أثناء رفع صورة التصميم.' });
         return;
       }
     } else {
       if (!attachmentText.trim()) {
-        alert('الرجاء إدخال رابط أو نص التصميم');
+        setFeedback({ type: 'error', title: 'النص مطلوب', message: 'الرجاء إدخال رابط أو نص التصميم قبل المتابعة.' });
         return;
       }
       finalAttachmentText = attachmentText;
@@ -83,14 +85,14 @@ const CustomOrder = () => {
         })
       });
       if (res.ok) {
-        alert('تم إرسال طلبك بنجاح! يمكنك متابعة حالة الطلب من ملفك الشخصي.');
-        navigate('/profile');
+        setFeedback({ type: 'success', title: 'تم إرسال الطلب', message: 'تم إرسال طلب التسعير بنجاح. يمكنك متابعة الحالة من ملفك الشخصي.' });
+        setTimeout(() => navigate('/profile'), 900);
       } else {
-        alert('حدث خطأ أثناء إرسال الطلب');
+        setFeedback({ type: 'error', title: 'تعذر الإرسال', message: 'حدث خطأ أثناء إرسال الطلب. حاول مرة أخرى.' });
       }
     } catch (error) {
       console.error(error);
-      alert('حدث خطأ في الاتصال بالخادم');
+      setFeedback({ type: 'error', title: 'خطأ في الاتصال', message: 'تعذر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.' });
     }
   };
 
@@ -101,6 +103,13 @@ const CustomOrder = () => {
       </h1>
       
       <div className="glass" style={{ padding: '40px', borderRadius: '12px' }}>
+        <ActionBanner
+          type={feedback?.type}
+          title={feedback?.title}
+          message={feedback?.message}
+          onClose={() => setFeedback(null)}
+        />
+
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

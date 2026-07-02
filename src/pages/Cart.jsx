@@ -5,6 +5,7 @@ import { useCart } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { Trash2, ShoppingCart } from 'lucide-react';
+import ActionBanner from '../components/ActionBanner';
 import './Cart.css';
 
 const Cart = () => {
@@ -16,6 +17,7 @@ const Cart = () => {
 
   const [shippingOptions, setShippingOptions] = useState([]);
   const [loadingShipping, setLoadingShipping] = useState(true);
+  const [feedback, setFeedback] = useState(null);
 
   const fetchShippingOptions = useCallback(async () => {
     try {
@@ -41,7 +43,11 @@ const Cart = () => {
 
   const handleCheckout = () => {
     if (!user) {
-      alert(t('login_required_checkout') || 'You must log in to proceed to checkout');
+      setFeedback({
+        type: 'info',
+        title: 'تسجيل الدخول مطلوب',
+        message: t('login_required_checkout') || 'You must log in to proceed to checkout'
+      });
       navigate('/login', { state: { from: '/cart' } });
       return;
     }
@@ -68,6 +74,13 @@ const Cart = () => {
   return (
     <div className="container section cart-page">
       <h1 style={{marginBottom: '40px'}}>{t('shopping_cart') || 'Shopping Cart'}</h1>
+
+      <ActionBanner
+        type={feedback?.type}
+        title={feedback?.title}
+        message={feedback?.message}
+        onClose={() => setFeedback(null)}
+      />
 
       <div className="cart-grid">
         {/* Items List */}

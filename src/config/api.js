@@ -55,6 +55,7 @@ export const API_ENDPOINTS = {
   
   // Custom Orders
   CUSTOM_ORDERS: '/api/custom-order',
+  USER_CUSTOM_ORDER_ACCEPT: (id) => `/api/user/custom-orders/${id}/accept`,
   
   // Checkout
   BANKS: '/api/banks',

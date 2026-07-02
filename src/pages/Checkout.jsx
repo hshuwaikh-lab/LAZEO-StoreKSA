@@ -1,15 +1,20 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { Copy } from 'lucide-react';
 import { uploadFileDirect } from '../utils/directUpload';
+import ActionBanner from '../components/ActionBanner';
 
 const Checkout = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { cartItems, currentTotal, finalTotal, shippingMethod, shippingCost, clearCart } = useCart();
   useContext(AuthContext);
+
+  const customOrder = location.state?.customOrder || null;
+  const isCustomOrderPayment = Boolean(customOrder);
 
   const [banks, setBanks] = useState([]);
   const [selectedBank, setSelectedBank] = useState(null);
@@ -17,14 +22,22 @@ const Checkout = () => {
   const [file, setFile] = useState(null);
   const [receiptText, setReceiptText] = useState('');
   const [loading, setLoading] = useState(true);
+  const [feedback, setFeedback] = useState(null);
 
   useEffect(() => {
-    if (cartItems.length === 0) {
+    if (!isCustomOrderPayment && cartItems.length === 0) {
       navigate('/cart');
       return;
     }
     fetchBanks();
-  }, [cartItems, navigate]);
+  }, [cartItems, navigate, isCustomOrderPayment]);
+
+  const orderSummaryAmount = useMemo(() => {
+    if (isCustomOrderPayment) {
+      return Number(customOrder?.priceQuote || 0);
+    }
+    return finalTotal || currentTotal;
+  }, [currentTotal, customOrder, finalTotal, isCustomOrderPayment]);
 
   const fetchBanks = async () => {
     try {
@@ -43,7 +56,7 @@ const Checkout = () => {
   const handleSubmitOrder = async (e) => {
     e.preventDefault();
     if (!selectedBank) {
-      alert('الرجاء اختيار بنك للتحويل');
+      setFeedback({ type: 'error', title: 'اختيار البنك مطلوب', message: 'الرجاء اختيار بنك للتحويل أولًا.' });
       return;
     }
     
@@ -53,26 +66,37 @@ const Checkout = () => {
 
     if (inputType === 'image') {
       if (!file) {
-        alert('الرجاء إرفاق صورة الإيصال');
+        setFeedback({ type: 'error', title: 'إيصال مفقود', message: 'الرجاء إرفاق صورة الإيصال قبل الإرسال.' });
         return;
       }
       try {
         const uploadData = await uploadFileDirect({ token, file });
         finalReceiptUrl = uploadData.url;
       } catch {
-        alert('حدث خطأ أثناء رفع الصورة');
+        setFeedback({ type: 'error', title: 'فشل رفع الصورة', message: 'حدث خطأ أثناء رفع صورة الإيصال.' });
         return;
       }
     } else {
       if (!receiptText.trim()) {
-        alert('الرجاء إدخال نص الحوالة');
+        setFeedback({ type: 'error', title: 'النص مطلوب', message: 'الرجاء إدخال نص الحوالة قبل المتابعة.' });
         return;
       }
       finalReceiptText = receiptText;
     }
 
     try {
-      const orderItems = shippingMethod 
+      const orderItems = isCustomOrderPayment
+        ? [{
+            id: `custom-order-${customOrder.id}`,
+            nameEn: `Custom Order #${customOrder.id}`,
+            nameAr: `طلب مخصص #${customOrder.id}`,
+            price: Number(customOrder.priceQuote || 0),
+            quantity: 1,
+            isCustomOrder: true,
+            material: customOrder.material,
+            details: customOrder.details
+          }]
+        : (shippingMethod 
         ? [...cartItems, { 
             id: 'shipping', 
             nameEn: `Shipping: ${shippingMethod.name}`, 
@@ -82,7 +106,7 @@ const Checkout = () => {
             isShipping: true,
             image: shippingMethod.logoUrl
           }]
-        : cartItems;
+        : cartItems);
 
       const res = await fetch(buildApiUrl(API_ENDPOINTS.ORDERS), {
         method: 'POST',
@@ -92,23 +116,32 @@ const Checkout = () => {
         },
         body: JSON.stringify({
           items: orderItems,
-          totalAmount: finalTotal || currentTotal,
+          totalAmount: orderSummaryAmount,
           bankId: selectedBank.id,
           receiptUrl: finalReceiptUrl,
-          receiptText: finalReceiptText
+          receiptText: finalReceiptText,
+          customOrderId: isCustomOrderPayment ? customOrder.id : null
         })
       });
 
       if (res.ok) {
-        alert('تم رفع الطلب بنجاح! بانتظار مراجعة الإيصال واعتماد الطلب من الإدارة.');
-        clearCart();
-        navigate('/profile');
+        setFeedback({
+          type: 'success',
+          title: isCustomOrderPayment ? 'تم إرسال الدفع' : 'تم رفع الطلب',
+          message: isCustomOrderPayment
+            ? 'تم إرسال دفع الطلب المخصص بنجاح. بانتظار مراجعة الإيصال واعتماد الطلب من الإدارة.'
+            : 'تم رفع الطلب بنجاح. بانتظار مراجعة الإيصال واعتماد الطلب من الإدارة.'
+        });
+        if (!isCustomOrderPayment) {
+          clearCart();
+        }
+        setTimeout(() => navigate('/profile'), 900);
       } else {
-        alert('حدث خطأ أثناء رفع الطلب.');
+        setFeedback({ type: 'error', title: 'تعذر الإرسال', message: 'حدث خطأ أثناء رفع الطلب. حاول مرة أخرى.' });
       }
     } catch (error) {
       console.error(error);
-      alert('خطأ في الاتصال بالخادم.');
+      setFeedback({ type: 'error', title: 'خطأ في الاتصال', message: 'تعذر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.' });
     }
   };
 
@@ -116,17 +149,40 @@ const Checkout = () => {
 
   return (
     <div className="container section" style={{ maxWidth: '800px' }}>
-      <h1 className="text-center" style={{ marginBottom: '40px', color: 'var(--accent-main)' }}>إتمام الطلب (الدفع بالتحويل البنكي)</h1>
+      <h1 className="text-center" style={{ marginBottom: '20px', color: 'var(--accent-main)' }}>{isCustomOrderPayment ? 'إتمام دفع الطلب المخصص' : 'إتمام الطلب (الدفع بالتحويل البنكي)'}</h1>
       
       <div className="glass" style={{ padding: '30px', borderRadius: '12px' }}>
-        <h2 style={{ marginBottom: '10px' }}>ملخص الطلب</h2>
-        <div style={{ marginBottom: '20px', padding: '15px', background: 'rgba(0,0,0,0.03)', borderRadius: '8px' }}>
-          <p>المجموع الفرعي: {currentTotal.toFixed(2)} ر.س</p>
-          <p>الشحن ({shippingMethod?.name || 'غير محدد'}): {shippingCost > 0 ? `${shippingCost.toFixed(2)} ر.س` : 'مجانًا'}</p>
-          <h3 style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-color)' }}>الإجمالي النهائي: {(finalTotal || currentTotal).toFixed(2)} ر.س</h3>
+        <ActionBanner
+          type={feedback?.type}
+          title={feedback?.title}
+          message={feedback?.message}
+          onClose={() => setFeedback(null)}
+        />
+
+        <div style={{ marginBottom: '16px', padding: '14px 16px', borderRadius: '12px', background: isCustomOrderPayment ? 'rgba(134,59,255,0.08)' : 'rgba(15,23,42,0.03)', border: isCustomOrderPayment ? '1px solid rgba(134,59,255,0.16)' : '1px solid var(--border-color)' }}>
+          <strong>{isCustomOrderPayment ? 'مرحلة الدفع النهائية للطلب المخصص' : 'مرحلة التحويل البنكي'}</strong>
+          <div style={{ marginTop: '6px', color: 'var(--text-light)' }}>
+            {isCustomOrderPayment
+              ? 'تمت الموافقة على السعر. اختر البنك وارفع الإيصال لإرسال الطلب إلى الإدارة.'
+              : 'اختر البنك وارفع الإيصال لإرسال الطلب إلى الإدارة.'}
+          </div>
         </div>
-        
-        <p style={{ marginBottom: '20px' }}>اختر الحساب البنكي الذي ترغب بالتحويل إليه:</p>
+
+        <h2 style={{ marginBottom: '10px' }}>ملخص الطلب</h2>
+        {isCustomOrderPayment && (
+          <div style={{ marginBottom: '20px', padding: '16px', background: 'rgba(134,59,255,0.08)', borderRadius: '12px', border: '1px solid rgba(134,59,255,0.2)' }}>
+            <strong>طلب مخصص رقم #{customOrder.id}</strong>
+            <div>المادة: {customOrder.material}</div>
+            <div>تفاصيل: {customOrder.details}</div>
+          </div>
+        )}
+        <div style={{ marginBottom: '20px', padding: '15px', background: 'rgba(0,0,0,0.03)', borderRadius: '8px' }}>
+          <p>المجموع الفرعي: {isCustomOrderPayment ? `${Number(customOrder?.priceQuote || 0).toFixed(2)} ر.س` : `${currentTotal.toFixed(2)} ر.س`}</p>
+          {!isCustomOrderPayment && <p>الشحن ({shippingMethod?.name || 'غير محدد'}): {shippingCost > 0 ? `${shippingCost.toFixed(2)} ر.س` : 'مجانًا'}</p>}
+          <h3 style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-color)' }}>الإجمالي النهائي: {orderSummaryAmount.toFixed(2)} ر.س</h3>
+        </div>
+
+        <p style={{ marginBottom: '20px' }}>{isCustomOrderPayment ? 'اختر الحساب البنكي الذي تريد التحويل إليه لإتمام الطلب المخصص:' : 'اختر الحساب البنكي الذي ترغب بالتحويل إليه:'}</p>
         <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
           {banks.map(bank => (
             <div 
@@ -218,7 +274,9 @@ const Checkout = () => {
               </div>
             )}
 
-            <button type="submit" className="btn-primary" style={{ padding: '15px', fontSize: '1.1rem' }}>تأكيد الطلب وإرسال للمراجعة</button>
+            <button type="submit" className="btn-primary" style={{ padding: '15px', fontSize: '1.1rem' }}>
+              {isCustomOrderPayment ? 'تأكيد الدفع وإرسال للمراجعة' : 'تأكيد الطلب وإرسال للمراجعة'}
+            </button>
           </form>
         )}
       </div>

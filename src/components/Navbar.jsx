@@ -71,9 +71,14 @@ const Navbar = () => {
           {user ? (
             <div className="user-dropdown" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               {user.role === 'admin' ? (
-                 <Link to="/admin" className="btn-outline" style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-                   <User size={18} /> لوحة الإدارة
-                 </Link>
+                <>
+                  <Link to="/profile" className="btn-outline" style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                    <User size={18} /> الملف الشخصي
+                  </Link>
+                  <Link to="/admin" className="btn-outline" style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                    <User size={18} /> لوحة الإدارة
+                  </Link>
+                </>
               ) : (
                 <Link to="/profile" style={{ fontWeight: '500', color: '#333', textDecoration: 'none', display: 'flex', gap: '5px', alignItems: 'center' }}>
                   <User size={18} /> {user.username}

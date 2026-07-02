@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import InvoiceTemplate from '../components/InvoiceTemplate';
+import ActionBanner from '../components/ActionBanner';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { uploadFileDirect } from '../utils/directUpload';
 
@@ -16,6 +17,15 @@ const statusLabels = {
   rejected: 'مرفوض',
 };
 
+const statusColors = {
+  pending: { bg: '#fef3c7', color: '#92400e' },
+  execution: { bg: '#dbeafe', color: '#1d4ed8' },
+  ready: { bg: '#e0e7ff', color: '#4338ca' },
+  shipped: { bg: '#cffafe', color: '#0f766e' },
+  delivered: { bg: '#dcfce7', color: '#166534' },
+  rejected: { bg: '#fee2e2', color: '#b91c1c' },
+};
+
 const AdminDesktopProgram = () => {
   const navigate = useNavigate();
   const invoiceRef = useRef(null);
@@ -26,6 +36,7 @@ const AdminDesktopProgram = () => {
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [data, setData] = useState({ orders: [], products: [], materials: [] });
   const [renderingOrder, setRenderingOrder] = useState(null);
+  const [feedback, setFeedback] = useState(null);
 
   const [newProduct, setNewProduct] = useState({
     nameAr: '',
@@ -73,7 +84,7 @@ const AdminDesktopProgram = () => {
       });
     } catch (error) {
       console.error('Failed to load desktop program data:', error);
-      alert('تعذر تحميل البيانات. يرجى المحاولة مرة أخرى.');
+      setFeedback({ type: 'error', title: 'تعذر تحميل البيانات', message: 'يرجى المحاولة مرة أخرى أو التأكد من اتصال الخادم.' });
     } finally {
       setLoading(false);
     }
@@ -87,6 +98,23 @@ const AdminDesktopProgram = () => {
     if (selectedStatus === 'all') return data.orders;
     return data.orders.filter((order) => order.status === selectedStatus);
   }, [data.orders, selectedStatus]);
+
+  const orderStats = useMemo(() => {
+    const counts = data.orders.reduce((acc, order) => {
+      acc[order.status] = (acc[order.status] || 0) + 1;
+      return acc;
+    }, {});
+
+    return {
+      total: data.orders.length,
+      pending: counts.pending || 0,
+      execution: counts.execution || 0,
+      ready: counts.ready || 0,
+      shipped: counts.shipped || 0,
+      delivered: counts.delivered || 0,
+      products: data.products.length,
+    };
+  }, [data.orders, data.products.length]);
 
   const markInvoicePrinted = useCallback(async (orderId) => {
     const token = localStorage.getItem('token');
@@ -142,7 +170,7 @@ const AdminDesktopProgram = () => {
       await fetchProgramData();
     } catch (error) {
       console.error('Failed to print/download invoice:', error);
-      alert('حدث خطأ أثناء تجهيز الفاتورة.');
+      setFeedback({ type: 'error', title: 'فشل تجهيز الفاتورة', message: 'حدث خطأ أثناء تجهيز ملف الطباعة أو التنزيل.' });
     } finally {
       setPrintingOrderId(null);
     }
@@ -192,10 +220,10 @@ const AdminDesktopProgram = () => {
       });
       setProductImageFile(null);
       await fetchProgramData();
-      alert('تم رفع المنتج بنجاح.');
+      setFeedback({ type: 'success', title: 'تم رفع المنتج', message: 'تمت إضافة المنتج بنجاح إلى المتجر.' });
     } catch (error) {
       console.error('Failed to upload product:', error);
-      alert(error.message || 'حدث خطأ أثناء رفع المنتج');
+      setFeedback({ type: 'error', title: 'فشل رفع المنتج', message: error.message || 'حدث خطأ أثناء رفع المنتج.' });
     } finally {
       setSavingProduct(false);
     }
@@ -210,6 +238,32 @@ const AdminDesktopProgram = () => {
             <p style={{ margin: '6px 0 0', color: '#475569' }}>واجهة سريعة للطباعة ورفع المنتجات من المكتب.</p>
           </div>
           <button type="button" className="btn-secondary" onClick={() => navigate('/admin')}>العودة للوحة الإدارة</button>
+        </div>
+
+        <ActionBanner
+          type={feedback?.type}
+          title={feedback?.title}
+          message={feedback?.message}
+          onClose={() => setFeedback(null)}
+        />
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+          {[
+            { label: 'إجمالي الطلبات', value: orderStats.total, tone: 'linear-gradient(135deg, #111827, #334155)' },
+            { label: 'بانتظار المراجعة', value: orderStats.pending, tone: 'linear-gradient(135deg, #f59e0b, #d97706)' },
+            { label: 'قيد التنفيذ', value: orderStats.execution, tone: 'linear-gradient(135deg, #3b82f6, #2563eb)' },
+            { label: 'جاهز', value: orderStats.ready, tone: 'linear-gradient(135deg, #8b5cf6, #6366f1)' },
+            { label: 'المنتجات', value: orderStats.products, tone: 'linear-gradient(135deg, #059669, #047857)' },
+          ].map((item) => (
+            <div key={item.label} style={{ padding: '14px 16px', borderRadius: '14px', color: 'white', background: item.tone, boxShadow: '0 8px 20px rgba(15, 23, 42, 0.12)' }}>
+              <div style={{ fontSize: '0.9rem', opacity: 0.92 }}>{item.label}</div>
+              <div style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.1 }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ marginBottom: '16px', padding: '12px 14px', borderRadius: '12px', background: 'rgba(2, 132, 199, 0.06)', border: '1px solid rgba(2, 132, 199, 0.12)', color: '#0f172a' }}>
+          <strong>تنبيه سريع:</strong> الطلبات المخصصة تظهر في الملف الشخصي بعد التسعير. بعد موافقة العميل ينتقل مباشرة إلى صفحة الدفع.
         </div>
 
         {loading ? (
@@ -250,7 +304,11 @@ const AdminDesktopProgram = () => {
                       <tr key={order.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
                         <td style={{ padding: '10px' }}>#{order.id}</td>
                         <td style={{ padding: '10px' }}>{order.user?.username || 'عميل'}</td>
-                        <td style={{ padding: '10px' }}>{statusLabels[order.status] || order.status || '-'}</td>
+                        <td style={{ padding: '10px' }}>
+                          <span style={{ padding: '5px 10px', borderRadius: '999px', background: statusColors[order.status]?.bg || '#e2e8f0', color: statusColors[order.status]?.color || '#334155', fontSize: '0.85rem', fontWeight: 700 }}>
+                            {statusLabels[order.status] || order.status || '-'}
+                          </span>
+                        </td>
                         <td style={{ padding: '10px' }}>{order.totalAmount} ر.س</td>
                         <td style={{ padding: '10px' }}>{new Date(order.createdAt).toLocaleDateString('en-GB')}</td>
                         <td style={{ padding: '10px' }}>

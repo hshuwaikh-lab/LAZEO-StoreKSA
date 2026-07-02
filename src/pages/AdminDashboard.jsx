@@ -7,6 +7,8 @@ import 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
 import InvoiceTemplate from '../components/InvoiceTemplate';
+import ActionBanner from '../components/ActionBanner';
+import Modal from '../components/Modal';
 import { uploadFileDirect } from '../utils/directUpload';
 
 const AdminDashboard = () => {
@@ -16,6 +18,11 @@ const AdminDashboard = () => {
   const [data, setData] = useState({ users: [], orders: [], customOrders: [], shipping: [], banks: [], products: [], materials: [], admins: [], settings: {} });
   const [loading, setLoading] = useState(true);
   const [printingOrder, setPrintingOrder] = useState(null);
+  const [feedback, setFeedback] = useState(null);
+  const [dialog, setDialog] = useState({ open: false, title: '', content: '', mode: 'text', confirmLabel: '', onConfirm: null });
+  const [passwordTargetId, setPasswordTargetId] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [dialogText, setDialogText] = useState('');
   const invoiceRef = useRef(null);
   const shippingImportInputRef = useRef(null);
   const banksImportInputRef = useRef(null);
@@ -109,11 +116,12 @@ const AdminDashboard = () => {
         body: JSON.stringify({ priceQuote: quoteValue })
       });
       if (res.ok) {
-        alert('تم إضافة التسعير بنجاح');
+        setFeedback({ type: 'success', title: 'تمت إضافة التسعير', message: 'تم حفظ سعر الطلب المخصص بنجاح.' });
         fetchData();
       }
     } catch (error) {
       console.error(error);
+      setFeedback({ type: 'error', title: 'تعذر إضافة التسعير', message: 'حدث خطأ أثناء حفظ التسعير.' });
     }
   };
 
@@ -126,11 +134,12 @@ const AdminDashboard = () => {
         body: JSON.stringify({ status })
       });
       if (res.ok) {
-        alert('تم تحديث حالة الطلب بنجاح');
+        setFeedback({ type: 'success', title: 'تم تحديث الحالة', message: 'تم تغيير حالة الطلب بنجاح.' });
         fetchData();
       }
     } catch (error) {
       console.error(error);
+      setFeedback({ type: 'error', title: 'تعذر تحديث الحالة', message: 'حدث خطأ أثناء تحديث حالة الطلب.' });
     }
   };
 
@@ -148,13 +157,14 @@ const AdminDashboard = () => {
       if (res.ok) {
         setNewAdmin({ username: '', email: '', password: '' });
         fetchData();
-        alert('تم إضافة المشرف بنجاح');
+        setFeedback({ type: 'success', title: 'تمت إضافة المشرف', message: 'تم إنشاء حساب مشرف جديد بنجاح.' });
       } else {
         const errorData = await res.json();
-        alert(errorData.error);
+        setFeedback({ type: 'error', title: 'تعذر إضافة المشرف', message: errorData.error || 'حدث خطأ أثناء إنشاء المشرف.' });
       }
     } catch (error) {
       console.error('Error creating admin:', error);
+      setFeedback({ type: 'error', title: 'تعذر إضافة المشرف', message: 'حدث خطأ أثناء الاتصال بالخادم.' });
     }
   };
 
@@ -172,18 +182,52 @@ const AdminDashboard = () => {
   };
 
   const handleChangeAdminPassword = async (id) => {
-    const newPassword = prompt('أدخل كلمة المرور الجديدة:');
-    if (!newPassword) return;
+    setPasswordTargetId(String(id));
+    setPasswordInput('');
+    setDialog({
+      open: true,
+      title: 'تغيير كلمة المرور',
+      content: 'أدخل كلمة المرور الجديدة للمستخدم ثم أكد العملية.',
+      mode: 'password'
+    });
+  };
+
+  const handleConfirmAdminPassword = async () => {
+    const targetId = passwordTargetId;
     const token = localStorage.getItem('token');
+
+    if (!passwordInput.trim()) {
+      setFeedback({ type: 'error', title: 'كلمة المرور مطلوبة', message: 'الرجاء إدخال كلمة المرور الجديدة.' });
+      return;
+    }
+
     try {
-      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_USER_PASSWORD(id)), {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_USER_PASSWORD(targetId)), {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: newPassword })
+        body: JSON.stringify({ password: passwordInput })
       });
-      if (res.ok) alert('تم تغيير كلمة المرور');
+      if (res.ok) {
+        setFeedback({ type: 'success', title: 'تم تغيير كلمة المرور', message: 'تم تحديث كلمة المرور بنجاح.' });
+      } else {
+        setFeedback({ type: 'error', title: 'تعذر تغيير كلمة المرور', message: 'لم يتم حفظ كلمة المرور الجديدة.' });
+      }
     } catch (error) {
       console.error('Error changing admin password:', error);
+      setFeedback({ type: 'error', title: 'تعذر تغيير كلمة المرور', message: 'حدث خطأ أثناء الاتصال بالخادم.' });
+    } finally {
+      setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' }));
+    }
+  };
+
+  const handleDialogConfirm = async () => {
+    const confirmAction = dialog.onConfirm;
+    try {
+      if (confirmAction) {
+        await confirmAction();
+      }
+    } finally {
+      setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' }));
     }
   };
 
@@ -312,11 +356,12 @@ const AdminDashboard = () => {
         body: JSON.stringify(settingsForm)
       });
       if (res.ok) {
-        alert('تم حفظ الإعدادات بنجاح');
+        setFeedback({ type: 'success', title: 'تم حفظ الإعدادات', message: 'تم تحديث إعدادات المتجر بنجاح.' });
         fetchData();
       }
     } catch (error) {
       console.error('Error saving settings:', error);
+      setFeedback({ type: 'error', title: 'تعذر حفظ الإعدادات', message: 'حدث خطأ أثناء حفظ الإعدادات.' });
     }
   };
 
@@ -367,7 +412,7 @@ const AdminDashboard = () => {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Error exporting users to Excel:', err);
-      alert('حدث خطأ أثناء تصدير الملف');
+      setFeedback({ type: 'error', title: 'فشل التصدير', message: 'حدث خطأ أثناء تصدير ملف Excel.' });
     }
   };
 
@@ -395,7 +440,7 @@ const AdminDashboard = () => {
           }
         } catch (err) {
           console.error("Error generating PDF:", err);
-          alert('حدث خطأ أثناء طباعة الفاتورة');
+          setFeedback({ type: 'error', title: 'فشل الطباعة', message: 'حدث خطأ أثناء تجهيز الفاتورة للطباعة.' });
         }
       }
       setPrintingOrder(null);
@@ -403,22 +448,30 @@ const AdminDashboard = () => {
   };
 
   const handleDeleteUser = async (id) => {
-    if (!window.confirm('هل أنت متأكد من مسح هذا العميل؟ سيتم مسح جميع طلباته أيضاً.')) return;
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_USER_DELETE(id)), {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        alert('تم مسح العميل بنجاح');
-        fetchData();
-      } else {
-        alert('فشل مسح العميل');
+    setDialog({
+      open: true,
+      title: 'تأكيد مسح العميل',
+      content: 'هل أنت متأكد من مسح هذا العميل؟ سيتم مسح جميع طلباته أيضاً.',
+      mode: 'confirm',
+      confirmLabel: 'مسح',
+      onConfirm: async () => {
+        const token = localStorage.getItem('token');
+        try {
+          const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_USER_DELETE(id)), {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            setFeedback({ type: 'success', title: 'تم مسح العميل', message: 'تم حذف العميل وبياناته بنجاح.' });
+            fetchData();
+          } else {
+            setFeedback({ type: 'error', title: 'تعذر مسح العميل', message: 'لم يتم حذف العميل.' });
+          }
+        } catch {
+          setFeedback({ type: 'error', title: 'تعذر الاتصال', message: 'حدث خطأ أثناء الاتصال بالخادم.' });
+        }
       }
-    } catch {
-      alert('حدث خطأ أثناء الاتصال');
-    }
+    });
   };
 
   const downloadJsonFile = (payload, fileName) => {
@@ -449,7 +502,7 @@ const AdminDashboard = () => {
 
   const exportShippingToJson = () => {
     if (!data.shipping.length) {
-      alert('لا توجد بيانات شحن للتصدير');
+      setFeedback({ type: 'info', title: 'لا توجد بيانات', message: 'لا توجد بيانات شحن للتصدير.' });
       return;
     }
 
@@ -471,7 +524,7 @@ const AdminDashboard = () => {
 
   const exportBanksToJson = () => {
     if (!data.banks.length) {
-      alert('لا توجد بيانات بنوك للتصدير');
+      setFeedback({ type: 'info', title: 'لا توجد بيانات', message: 'لا توجد بيانات بنوك للتصدير.' });
       return;
     }
 
@@ -499,7 +552,7 @@ const AdminDashboard = () => {
 
     const token = localStorage.getItem('token');
     if (!token) {
-      alert('يرجى تسجيل الدخول مرة أخرى');
+      setFeedback({ type: 'error', title: 'تسجيل الدخول مطلوب', message: 'يرجى تسجيل الدخول مرة أخرى.' });
       return;
     }
 
@@ -508,7 +561,7 @@ const AdminDashboard = () => {
       const items = Array.isArray(parsed?.items) ? parsed.items : [];
 
       if (!items.length) {
-        alert('الملف لا يحتوي على بيانات شحن');
+        setFeedback({ type: 'error', title: 'ملف غير صالح', message: 'الملف لا يحتوي على بيانات شحن.' });
         return;
       }
 
@@ -555,9 +608,9 @@ const AdminDashboard = () => {
       }
 
       await fetchData();
-      alert(`تم استيراد بيانات الشحن بنجاح\nمضاف: ${created}\nمحدث: ${updated}\nمتجاوز: ${skipped}`);
+      setFeedback({ type: 'success', title: 'تم استيراد الشحن', message: `مضاف: ${created} | محدث: ${updated} | متجاوز: ${skipped}` });
     } catch (error) {
-      alert(error.message || 'فشل استيراد بيانات الشحن');
+      setFeedback({ type: 'error', title: 'فشل استيراد الشحن', message: error.message || 'فشل استيراد بيانات الشحن.' });
     }
   };
 
@@ -568,7 +621,7 @@ const AdminDashboard = () => {
 
     const token = localStorage.getItem('token');
     if (!token) {
-      alert('يرجى تسجيل الدخول مرة أخرى');
+      setFeedback({ type: 'error', title: 'تسجيل الدخول مطلوب', message: 'يرجى تسجيل الدخول مرة أخرى.' });
       return;
     }
 
@@ -577,7 +630,7 @@ const AdminDashboard = () => {
       const items = Array.isArray(parsed?.items) ? parsed.items : [];
 
       if (!items.length) {
-        alert('الملف لا يحتوي على بيانات بنوك');
+        setFeedback({ type: 'error', title: 'ملف غير صالح', message: 'الملف لا يحتوي على بيانات بنوك.' });
         return;
       }
 
@@ -625,9 +678,9 @@ const AdminDashboard = () => {
       }
 
       await fetchData();
-      alert(`تم استيراد بيانات البنوك بنجاح\nمضاف: ${created}\nمحدث: ${updated}\nمتجاوز: ${skipped}`);
+      setFeedback({ type: 'success', title: 'تم استيراد البنوك', message: `مضاف: ${created} | محدث: ${updated} | متجاوز: ${skipped}` });
     } catch (error) {
-      alert(error.message || 'فشل استيراد بيانات البنوك');
+      setFeedback({ type: 'error', title: 'فشل استيراد البنوك', message: error.message || 'فشل استيراد بيانات البنوك.' });
     }
   };
 
@@ -656,7 +709,7 @@ const AdminDashboard = () => {
         const uploadData = await uploadFileDirect({ token, file: shippingLogoFile });
         finalLogoUrl = uploadData.url;
       } catch {
-        alert('حدث خطأ أثناء الرفع');
+        setFeedback({ type: 'error', title: 'فشل الرفع', message: 'حدث خطأ أثناء رفع شعار الشحن.' });
         return;
       }
     }
@@ -678,6 +731,7 @@ const AdminDashboard = () => {
       }
     } catch (error) {
       console.error('Error saving shipping:', error);
+      setFeedback({ type: 'error', title: 'تعذر حفظ الشحن', message: 'حدث خطأ أثناء حفظ بيانات الشحن.' });
     }
   };
 
@@ -711,26 +765,38 @@ const AdminDashboard = () => {
       if (res.ok) {
         handleCancelEditMaterial();
         fetchData();
+        setFeedback({ type: 'success', title: 'تم حفظ المادة', message: 'تمت إضافة/تحديث نوع المادة بنجاح.' });
       }
     } catch (error) {
       console.error('Error saving material:', error);
+      setFeedback({ type: 'error', title: 'تعذر حفظ المادة', message: 'حدث خطأ أثناء حفظ نوع المادة.' });
     }
   };
 
   const handleDeleteMaterial = async (id) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذه المادة؟')) return;
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_MATERIALS_DETAIL(id)), {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        fetchData();
+    setDialog({
+      open: true,
+      title: 'تأكيد حذف المادة',
+      content: 'هل أنت متأكد من حذف هذه المادة؟',
+      mode: 'confirm',
+      confirmLabel: 'حذف',
+      onConfirm: async () => {
+        const token = localStorage.getItem('token');
+        try {
+          const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_MATERIALS_DETAIL(id)), {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            fetchData();
+            setFeedback({ type: 'success', title: 'تم حذف المادة', message: 'تم حذف نوع المادة بنجاح.' });
+          }
+        } catch (error) {
+          console.error('Error deleting material:', error);
+          setFeedback({ type: 'error', title: 'تعذر حذف المادة', message: 'حدث خطأ أثناء حذف المادة.' });
+        }
       }
-    } catch (error) {
-      console.error('Error deleting material:', error);
-    }
+    });
   };
 
   const [newBank, setNewBank] = useState({ bankName: '', accountName: '', accountNumber: '', iban: '' });
@@ -754,19 +820,27 @@ const AdminDashboard = () => {
   };
 
   const handleDeleteProduct = async (id) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذا المنتج؟')) return;
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_PRODUCTS_DETAIL(id)), {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        fetchData();
+    setDialog({
+      open: true,
+      title: 'تأكيد حذف المنتج',
+      content: 'هل أنت متأكد من حذف هذا المنتج؟',
+      mode: 'confirm',
+      confirmLabel: 'حذف',
+      onConfirm: async () => {
+        const token = localStorage.getItem('token');
+        try {
+          const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_PRODUCTS_DETAIL(id)), {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            fetchData();
+          }
+        } catch (error) {
+          console.error('Error deleting product:', error);
+        }
       }
-    } catch (error) {
-      console.error('Error deleting product:', error);
-    }
+    });
   };
 
   const handleSaveProduct = async (e) => {
@@ -779,7 +853,7 @@ const AdminDashboard = () => {
         const uploadData = await uploadFileDirect({ token, file: productImageFile });
         imageUrl = uploadData.url;
       } catch {
-        alert('حدث خطأ أثناء الرفع');
+        setFeedback({ type: 'error', title: 'فشل الرفع', message: 'حدث خطأ أثناء رفع صورة المنتج.' });
         return;
       }
     }
@@ -826,7 +900,7 @@ const AdminDashboard = () => {
         const uploadData = await uploadFileDirect({ token, file: bankLogoFile });
         logoUrl = uploadData.url;
       } catch {
-        alert('حدث خطأ أثناء الرفع');
+        setFeedback({ type: 'error', title: 'فشل الرفع', message: 'حدث خطأ أثناء رفع شعار البنك.' });
         return;
       }
     }
@@ -850,9 +924,11 @@ const AdminDashboard = () => {
         setBankLogoFile(null);
         setEditingBankId(null);
         fetchData();
+        setFeedback({ type: 'success', title: 'تم حفظ البنك', message: 'تمت إضافة/تحديث بيانات البنك بنجاح.' });
       }
     } catch (error) {
       console.error('Error saving bank:', error);
+      setFeedback({ type: 'error', title: 'تعذر حفظ البنك', message: 'حدث خطأ أثناء حفظ بيانات البنك.' });
     }
   };
 
@@ -881,6 +957,13 @@ const AdminDashboard = () => {
               تسجيل الخروج
             </button>
           </div>
+
+          <ActionBanner
+            type={feedback?.type}
+            title={feedback?.title}
+            message={feedback?.message}
+            onClose={() => setFeedback(null)}
+          />
         </div>
 
         {storageHealth && (
@@ -959,7 +1042,7 @@ const AdminDashboard = () => {
                             </div>
                           ) : '-'}
                         </td>
-                        <td>{new Date(u.createdAt).toLocaleDateString()}</td>
+                                {o.receiptText && <button className="btn-secondary" style={{padding: '2px 5px', fontSize: '0.8rem', marginRight: '5px'}} onClick={() => setDialog({ open: true, title: `نص الإيصال #${o.id}`, content: o.receiptText, confirmLabel: 'إغلاق', onConfirm: null })}>نص</button>}
                         <td>
                           <button className="btn-danger" onClick={() => handleDeleteUser(u.id)} style={{padding: '5px 10px', fontSize: '0.8rem', borderRadius: '4px'}}>مسح</button>
                         </td>
@@ -1094,7 +1177,7 @@ const AdminDashboard = () => {
                             <td>{o.id}</td><td>{o.user?.username}</td><td>{o.totalAmount}</td>
                             <td>
                               {o.receiptUrl && <a href={o.receiptUrl} target="_blank" rel="noreferrer" style={{marginRight: '5px'}}>صورة</a>}
-                              {o.receiptText && <button className="btn-secondary" style={{padding: '2px 5px', fontSize: '0.8rem', marginRight: '5px'}} onClick={() => alert(o.receiptText)}>نص</button>}
+                              {o.receiptText && <button className="btn-secondary" style={{padding: '2px 5px', fontSize: '0.8rem', marginRight: '5px'}} onClick={() => { setDialog({ open: true, title: `نص الإيصال #${o.id}`, content: o.receiptText, mode: 'text' }); setDialogText(o.receiptText); }}>نص</button>}
                               {!o.receiptUrl && !o.receiptText && '-'}
                             </td>
                             <td>{new Date(o.createdAt).toLocaleDateString()}</td>
@@ -1164,7 +1247,7 @@ const AdminDashboard = () => {
                       <td>{co.id}</td><td>{co.user?.username}</td><td>{co.material}</td>
                       <td>
                         {co.attachmentUrl && <a href={co.attachmentUrl} target="_blank" rel="noreferrer" style={{marginRight: '5px'}}>ملف</a>}
-                        {co.attachmentText && <button className="btn-secondary" style={{padding: '2px 5px', fontSize: '0.8rem', marginRight: '5px'}} onClick={() => alert(co.attachmentText)}>نص</button>}
+                        {co.attachmentText && <button className="btn-secondary" style={{padding: '2px 5px', fontSize: '0.8rem', marginRight: '5px'}} onClick={() => { setDialog({ open: true, title: `نص الطلب #${co.id}`, content: co.attachmentText, mode: 'text' }); setDialogText(co.attachmentText); }}>نص</button>}
                         {!co.attachmentUrl && !co.attachmentText && '-'}
                       </td>
                       <td>{co.status}</td>
@@ -1294,6 +1377,33 @@ const AdminDashboard = () => {
           </div>
         )}
       </div>
+
+      <Modal
+        open={dialog.open}
+        title={dialog.title}
+        onClose={() => setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' }))}
+        actions={dialog.mode === 'password' ? [
+          <button key="cancel" type="button" className="btn-secondary" onClick={() => setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' }))}>إلغاء</button>,
+          <button key="confirm" type="button" className="btn-primary" onClick={handleConfirmAdminPassword}>حفظ كلمة المرور</button>
+        ] : dialog.mode === 'confirm' ? [
+          <button key="cancel" type="button" className="btn-secondary" onClick={() => setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' }))}>إلغاء</button>,
+          <button key="confirm" type="button" className="btn-primary" onClick={handleDialogConfirm}>{dialog.confirmLabel || 'تأكيد'}</button>
+        ] : [
+          <button key="close" type="button" className="btn-primary" onClick={() => setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' }))}>إغلاق</button>
+        ]}
+      >
+        {dialog.mode === 'password' ? (
+          <input
+            type="password"
+            value={passwordInput}
+            onChange={(event) => setPasswordInput(event.target.value)}
+            placeholder="أدخل كلمة المرور الجديدة"
+            style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #cbd5e1' }}
+          />
+        ) : (
+          <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{dialogText || dialog.content}</p>
+        )}
+      </Modal>
 
       {printingOrder && <InvoiceTemplate order={printingOrder} ref={invoiceRef} />}
     </div>
