@@ -12,7 +12,7 @@ import Modal from '../components/Modal';
 import { uploadFileDirect } from '../utils/directUpload';
 
 const AdminDashboard = () => {
-  const { logout } = useContext(AuthContext);
+  const { logout, user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('orders'); // users, orders, customOrders, shipping, banks, products, materials, admins, settings, invoices
   const [data, setData] = useState({ users: [], orders: [], customOrders: [], shipping: [], banks: [], products: [], materials: [], admins: [], settings: {} });
@@ -179,6 +179,42 @@ const AdminDashboard = () => {
     } catch (error) {
       console.error('Error toggling admin status:', error);
     }
+  };
+
+  const handleDeleteAdmin = async (admin) => {
+    if (user?.id === admin.id) {
+      setFeedback({ type: 'error', title: 'غير مسموح', message: 'لا يمكنك مسح حسابك الإداري الحالي.' });
+      return;
+    }
+
+    setDialog({
+      open: true,
+      title: 'تأكيد مسح المشرف',
+      content: `هل أنت متأكد من مسح المشرف ${admin.username}؟`,
+      mode: 'confirm',
+      confirmLabel: 'مسح',
+      onConfirm: async () => {
+        const token = localStorage.getItem('token');
+        try {
+          const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_USER_DELETE(admin.id)), {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+
+          if (res.ok) {
+            setFeedback({ type: 'success', title: 'تم مسح المشرف', message: 'تم حذف حساب المشرف بنجاح.' });
+            fetchData();
+            return;
+          }
+
+          const errorData = await res.json().catch(() => ({}));
+          setFeedback({ type: 'error', title: 'تعذر مسح المشرف', message: errorData.error || 'لم يتم حذف حساب المشرف.' });
+        } catch (error) {
+          console.error('Error deleting admin:', error);
+          setFeedback({ type: 'error', title: 'تعذر مسح المشرف', message: 'حدث خطأ أثناء الاتصال بالخادم.' });
+        }
+      }
+    });
   };
 
   const handleChangeAdminPassword = async (id) => {
@@ -1074,7 +1110,8 @@ const AdminDashboard = () => {
                         <td>{a.isActive ? 'مفعل' : 'معطل'}</td>
                         <td>
                           <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '0.9rem', marginRight: '5px' }} onClick={() => handleToggleAdminActive(a.id)}>{a.isActive ? 'تعطيل' : 'تفعيل'}</button>
-                          <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '0.9rem' }} onClick={() => handleChangeAdminPassword(a.id)}>تغيير الرقم السري</button>
+                          <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '0.9rem', marginRight: '5px' }} onClick={() => handleChangeAdminPassword(a.id)}>تغيير الرقم السري</button>
+                          <button className="btn-solid" style={{ padding: '4px 8px', fontSize: '0.9rem', background: user?.id === a.id ? '#94a3b8' : 'red', color: 'white', border: 'none', cursor: user?.id === a.id ? 'not-allowed' : 'pointer' }} onClick={() => handleDeleteAdmin(a)} disabled={user?.id === a.id}>مسح</button>
                         </td>
                       </tr>
                     ))}

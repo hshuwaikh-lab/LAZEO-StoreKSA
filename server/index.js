@@ -661,6 +661,26 @@ app.put('/api/admin/users/:id/password', authenticateToken, requireAdmin, async 
 app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   const userId = parseInt(req.params.id);
   try {
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true }
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'المستخدم غير موجود' });
+    }
+
+    if (req.user.id === userId) {
+      return res.status(400).json({ error: 'لا يمكنك مسح حسابك الإداري الحالي' });
+    }
+
+    if (targetUser.role === 'admin') {
+      const adminsCount = await prisma.user.count({ where: { role: 'admin' } });
+      if (adminsCount <= 1) {
+        return res.status(400).json({ error: 'لا يمكن مسح آخر مشرف في النظام' });
+      }
+    }
+
     const [orders, customOrders] = await Promise.all([
       prisma.order.findMany({ where: { userId }, select: { receiptUrl: true } }),
       prisma.customOrder.findMany({ where: { userId }, select: { attachmentUrl: true } })
@@ -676,7 +696,7 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
     await prisma.order.deleteMany({ where: { userId } });
     await prisma.customOrder.deleteMany({ where: { userId } });
     await prisma.user.delete({ where: { id: userId } });
-    res.json({ message: 'تم مسح العميل بنجاح' });
+    res.json({ message: targetUser.role === 'admin' ? 'تم مسح المشرف بنجاح' : 'تم مسح العميل بنجاح' });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
