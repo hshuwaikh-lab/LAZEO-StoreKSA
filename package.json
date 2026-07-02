@@ -2,7 +2,7 @@
   "name": "web-lazeo-storeksa",
   "private": true,
   "version": "0.0.0",
-  "homepage": "https://hshuwaikh-lab.github.io/LAZEO-StoreKSA/",
+  "homepage": "https://lazeoksa.com/",
   "productName": "LAZEO Store",
   "main": "electron/main.cjs",
   "type": "module",
