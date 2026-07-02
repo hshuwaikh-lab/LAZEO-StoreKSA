@@ -30,6 +30,9 @@ const allowedUploadMimeTypes = new Set([
   'application/pdf',
   'text/plain'
 ]);
+const FORGOT_PASSWORD_RATE_WINDOW_MS = Math.max(parseInt(process.env.FORGOT_PASSWORD_RATE_WINDOW_MS || '900000', 10) || 900000, 10000);
+const FORGOT_PASSWORD_RATE_MAX_ATTEMPTS = Math.max(parseInt(process.env.FORGOT_PASSWORD_RATE_MAX_ATTEMPTS || '5', 10) || 5, 1);
+const forgotPasswordAttempts = new Map();
 
 const supabase = isSupabaseEnabled
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
@@ -69,6 +72,31 @@ function buildSafeFileName(originalName) {
     .slice(0, 80);
 
   return `${Date.now()}-${baseName || 'file'}${extension}`;
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.ip || req.socket?.remoteAddress || 'unknown-ip';
+}
+
+function isForgotPasswordRateLimited(req, identifier) {
+  const now = Date.now();
+  const normalizedIdentifier = String(identifier || '').trim().toLowerCase();
+  const key = `${getClientIp(req)}|${normalizedIdentifier}`;
+  const attempts = forgotPasswordAttempts.get(key) || [];
+
+  const recentAttempts = attempts.filter((ts) => now - ts < FORGOT_PASSWORD_RATE_WINDOW_MS);
+  if (recentAttempts.length >= FORGOT_PASSWORD_RATE_MAX_ATTEMPTS) {
+    forgotPasswordAttempts.set(key, recentAttempts);
+    return true;
+  }
+
+  recentAttempts.push(now);
+  forgotPasswordAttempts.set(key, recentAttempts);
+  return false;
 }
 
 function shouldFallbackToLocalStorage(error) {
@@ -210,7 +238,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     res.status(201).json({ message: 'تم إنشاء الحساب بنجاح', user: { id: newUser.id, role: newUser.role } });
   } catch (error) {
-    console.error('Login endpoint error:', error);
+    console.error('Register endpoint error:', error);
     res.status(500).json({
       error: 'حدث خطأ في السيرفر',
       detail: error?.code || error?.name || 'UnknownError',
@@ -309,6 +337,10 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       return res.status(400).json({ error: 'أدخل رقم الجوال أو البريد الإلكتروني' });
     }
 
+    if (isForgotPasswordRateLimited(req, identifier)) {
+      return res.status(429).json({ error: 'تم تجاوز عدد المحاولات المسموح. يرجى المحاولة لاحقاً.' });
+    }
+
     const user = await prisma.user.findFirst({
       where: {
         OR: [
@@ -329,10 +361,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     });
     
     // TODO: Send tempPassword via WhatsApp/Email provider integration
-    console.log(`Password reset for ${identifier}: كلمة المرور الجديدة الخاصة بك هي: ${tempPassword}`);
-    
-    res.json({ message: 'تم إرسال كلمة المرور الجديدة إلى الواتساب الخاص بك' });
+    // Never log the temporary password to avoid leaking credentials into logs.
+    console.log(`Password reset requested for user ${user.id} via identifier ${identifier}`);
+
+    res.json({ message: 'تم إنشاء كلمة مرور مؤقتة وإرسالها عبر وسيلة التواصل المسجلة' });
   } catch (error) {
+    console.error('Forgot password endpoint error:', error);
     res.status(500).json({ error: 'حدث خطأ' });
   }
 });
@@ -436,7 +470,7 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: { id: true, username: true, email: true, phone: true, address: true, role: true, receiveWhatsApp: true } });
     res.json(user);
   } catch (error) {
-    console.error('Settings endpoint error:', error);
+    console.error('User profile endpoint error:', error);
     res.status(500).json({
       error: 'Server error',
       detail: error?.code || error?.name || 'UnknownError',
