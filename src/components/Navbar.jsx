@@ -112,6 +112,51 @@ const Navbar = () => {
               </Link>
             </li>
           ))}
+          {user && (
+            <>
+              <li>
+                <Link
+                  to="/profile"
+                  className={`mobile-nav-link ${location.pathname === '/profile' ? 'active' : ''}`}
+                  onClick={() => setIsOpen(false)}
+                >
+                  <User size={18} /> الملف الشخصي
+                </Link>
+              </li>
+              {user.role === 'admin' && (
+                <>
+                  <li>
+                    <Link
+                      to="/admin"
+                      className={`mobile-nav-link ${location.pathname === '/admin' ? 'active' : ''}`}
+                      onClick={() => setIsOpen(false)}
+                    >
+                      <User size={18} /> لوحة الإدارة
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/admin/desktop-program"
+                      className={`mobile-nav-link ${location.pathname === '/admin/desktop-program' ? 'active' : ''}`}
+                      onClick={() => setIsOpen(false)}
+                    >
+                      <User size={18} /> برنامج المكتب
+                    </Link>
+                  </li>
+                </>
+              )}
+              <li>
+                <button
+                  type="button"
+                  onClick={() => { logout(); setIsOpen(false); }}
+                  className="mobile-nav-link"
+                  style={{ width: '100%', textAlign: 'right', background: 'transparent', border: 'none', padding: 0 }}
+                >
+                  خروج
+                </button>
+              </li>
+            </>
+          )}
         </ul>
       </div>
     </header>
