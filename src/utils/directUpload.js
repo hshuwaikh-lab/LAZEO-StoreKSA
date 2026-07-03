@@ -23,6 +23,11 @@ export const uploadFileDirect = async ({ token, file }) => {
   if (!token) throw new Error('Missing auth token');
   if (!file) throw new Error('Missing file');
 
+  // Image uploads must pass through the backend so the store logo watermark can be applied.
+  if (String(file.type || '').toLowerCase().startsWith('image/')) {
+    return uploadWithLegacyApi(token, file);
+  }
+
   const prepareRes = await fetch(buildApiUrl(API_ENDPOINTS.UPLOAD_SIGNED_URL), {
     method: 'POST',
     headers: {

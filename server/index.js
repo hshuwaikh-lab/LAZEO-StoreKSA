@@ -6,6 +6,7 @@ const { PrismaClient } = require('@prisma/client');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const sharp = require('sharp');
 const { createClient } = require('@supabase/supabase-js');
 
 require('dotenv').config();
@@ -30,6 +31,8 @@ const allowedUploadMimeTypes = new Set([
   'application/pdf',
   'text/plain'
 ]);
+const watermarkEligibleMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const storeLogoPath = path.join(__dirname, '..', 'public', 'logo.png');
 const FORGOT_PASSWORD_RATE_WINDOW_MS = Math.max(parseInt(process.env.FORGOT_PASSWORD_RATE_WINDOW_MS || '900000', 10) || 900000, 10000);
 const FORGOT_PASSWORD_RATE_MAX_ATTEMPTS = Math.max(parseInt(process.env.FORGOT_PASSWORD_RATE_MAX_ATTEMPTS || '5', 10) || 5, 1);
 const forgotPasswordAttempts = new Map();
@@ -129,11 +132,56 @@ function isAllowedUpload(contentType, fileSize) {
   return { ok: true };
 }
 
-async function uploadFileToLocal(req, fileName) {
+async function uploadFileToLocal(req, fileName, fileBuffer) {
   const localPath = path.join(uploadsDir, fileName);
-  await fs.promises.writeFile(localPath, req.file.buffer);
+  await fs.promises.writeFile(localPath, fileBuffer);
   const localUrl = `${req.protocol}://${req.get('host')}/uploads/${fileName}`;
   return localUrl;
+}
+
+function isImageUpload(contentType) {
+  return String(contentType || '').toLowerCase().startsWith('image/');
+}
+
+async function applyStoreLogoWatermark(fileBuffer, contentType) {
+  const normalizedType = String(contentType || '').toLowerCase();
+
+  if (!watermarkEligibleMimeTypes.has(normalizedType)) {
+    return { buffer: fileBuffer, contentType: normalizedType || contentType };
+  }
+
+  if (!fs.existsSync(storeLogoPath)) {
+    console.warn('Store logo not found, skipping image watermark. Expected at:', storeLogoPath);
+    return { buffer: fileBuffer, contentType: normalizedType };
+  }
+
+  const source = sharp(fileBuffer, { failOn: 'none' }).rotate();
+  const metadata = await source.metadata();
+  if (!metadata.width || !metadata.height) {
+    return { buffer: fileBuffer, contentType: normalizedType };
+  }
+
+  const targetLogoWidth = Math.max(Math.min(Math.round(metadata.width * 0.2), 280), 90);
+  const logoBuffer = await sharp(storeLogoPath)
+    .resize({ width: targetLogoWidth, withoutEnlargement: true })
+    .png()
+    .toBuffer();
+
+  let output = source.composite([{ input: logoBuffer, gravity: 'southeast' }]);
+  if (normalizedType === 'image/jpeg') {
+    output = output.jpeg({ quality: 90 });
+  } else if (normalizedType === 'image/gif') {
+    output = output.gif();
+  } else if (normalizedType === 'image/webp') {
+    output = output.webp({ quality: 90 });
+  } else {
+    output = output.png();
+  }
+
+  return {
+    buffer: await output.toBuffer(),
+    contentType: normalizedType,
+  };
 }
 
 function extractSupabaseStoragePath(fileUrl) {
@@ -445,12 +493,25 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req, re
   const fileName = buildSafeFileName(req.file.originalname);
 
   try {
+    let finalBuffer = req.file.buffer;
+    let finalContentType = req.file.mimetype;
+
+    if (isImageUpload(req.file.mimetype)) {
+      try {
+        const processed = await applyStoreLogoWatermark(req.file.buffer, req.file.mimetype);
+        finalBuffer = processed.buffer;
+        finalContentType = processed.contentType;
+      } catch (watermarkError) {
+        console.error('Image watermark processing failed, proceeding without watermark:', watermarkError.message);
+      }
+    }
+
     if (isSupabaseEnabled) {
       const filePath = `uploads/${fileName}`;
       const { error: uploadError } = await supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
-        .upload(filePath, req.file.buffer, {
-          contentType: req.file.mimetype,
+        .upload(filePath, finalBuffer, {
+          contentType: finalContentType,
           upsert: false
         });
 
@@ -465,12 +526,12 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req, re
       return res.json({ url: data.publicUrl });
     }
 
-    const localUrl = await uploadFileToLocal(req, fileName);
+    const localUrl = await uploadFileToLocal(req, fileName, finalBuffer);
     return res.json({ url: localUrl });
   } catch (error) {
     if (shouldFallbackToLocalStorage(error)) {
       try {
-        const localUrl = await uploadFileToLocal(req, fileName);
+        const localUrl = await uploadFileToLocal(req, fileName, req.file.buffer);
         return res.json({
           url: localUrl,
           storageMode: 'local-fallback',
