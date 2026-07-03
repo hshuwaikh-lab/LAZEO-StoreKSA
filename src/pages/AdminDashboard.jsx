@@ -614,32 +614,59 @@ const AdminDashboard = () => {
     downloadJsonFile(payload, `bank-accounts-${new Date().toISOString().slice(0, 10)}.json`);
   };
 
-  const exportProductsToJson = () => {
+  const exportProductsToExcel = async () => {
     if (!data.products.length) {
       setFeedback({ type: 'info', title: 'لا توجد بيانات', message: 'لا توجد منتجات للتصدير.' });
       return;
     }
 
-    const payload = {
-      type: 'products',
-      exportedAt: new Date().toISOString(),
-      count: data.products.length,
-      items: data.products.map((p) => ({
-        id: p.id,
-        nameAr: p.nameAr,
-        nameEn: p.nameEn,
-        price: p.price,
-        offerPrice: p.offerPrice ?? null,
-        offerMinQuantity: p.offerMinQuantity ?? null,
-        offerEndsAt: p.offerEndsAt || null,
-        category: p.category,
-        descriptionAr: p.descriptionAr,
-        descriptionEn: p.descriptionEn,
-        image: p.image || ''
-      }))
-    };
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Products');
 
-    downloadJsonFile(payload, `products-${new Date().toISOString().slice(0, 10)}.json`);
+      sheet.columns = [
+        { header: 'id', key: 'id', width: 10 },
+        { header: 'nameAr', key: 'nameAr', width: 24 },
+        { header: 'nameEn', key: 'nameEn', width: 24 },
+        { header: 'price', key: 'price', width: 14 },
+        { header: 'offerPrice', key: 'offerPrice', width: 14 },
+        { header: 'offerMinQuantity', key: 'offerMinQuantity', width: 18 },
+        { header: 'offerEndsAt', key: 'offerEndsAt', width: 24 },
+        { header: 'category', key: 'category', width: 18 },
+        { header: 'descriptionAr', key: 'descriptionAr', width: 34 },
+        { header: 'descriptionEn', key: 'descriptionEn', width: 34 },
+        { header: 'image', key: 'image', width: 40 }
+      ];
+
+      data.products.forEach((p) => {
+        sheet.addRow({
+          id: p.id,
+          nameAr: p.nameAr,
+          nameEn: p.nameEn,
+          price: p.price,
+          offerPrice: p.offerPrice ?? '',
+          offerMinQuantity: p.offerMinQuantity ?? '',
+          offerEndsAt: p.offerEndsAt || '',
+          category: p.category,
+          descriptionAr: p.descriptionAr,
+          descriptionEn: p.descriptionEn,
+          image: p.image || ''
+        });
+      });
+
+      const buf = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `products-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      setFeedback({ type: 'error', title: 'فشل التصدير', message: 'حدث خطأ أثناء تصدير ملف Excel للمنتجات.' });
+    }
   };
 
   const importShippingFromJson = async (event) => {
@@ -781,7 +808,7 @@ const AdminDashboard = () => {
     }
   };
 
-  const importProductsFromJson = async (event) => {
+  const importProductsFromExcel = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
@@ -852,14 +879,103 @@ const AdminDashboard = () => {
       };
     };
 
+    const toText = (value) => {
+      if (value === null || value === undefined) return '';
+      if (value instanceof Date) return value.toISOString();
+      if (typeof value === 'object') {
+        if (typeof value.text === 'string') return value.text;
+        if (value.result !== undefined && value.result !== null) return String(value.result);
+      }
+      return String(value);
+    };
+
+    const excelSerialToIso = (serial) => {
+      const normalized = Number(serial);
+      if (!Number.isFinite(normalized)) return '';
+      const ms = Math.round((normalized - 25569) * 86400 * 1000);
+      const date = new Date(ms);
+      return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+    };
+
+    const toIsoDate = (value) => {
+      if (!value && value !== 0) return '';
+      if (value instanceof Date) return value.toISOString();
+      if (typeof value === 'number') return excelSerialToIso(value);
+
+      const asText = toText(value).trim();
+      if (!asText) return '';
+      const parsed = new Date(asText);
+      return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+    };
+
     try {
-      const parsed = await readJsonFile(file);
-      const items = Array.isArray(parsed)
-        ? parsed
-        : (Array.isArray(parsed?.items) ? parsed.items : []);
+      const workbook = new ExcelJS.Workbook();
+      const arrayBuffer = await file.arrayBuffer();
+      await workbook.xlsx.load(arrayBuffer);
+      const sheet = workbook.worksheets[0];
+
+      if (!sheet) {
+        setFeedback({ type: 'error', title: 'ملف غير صالح', message: 'ملف Excel لا يحتوي على أي ورقة.' });
+        return;
+      }
+
+      const headerRow = sheet.getRow(1);
+      const headerMap = new Map();
+      headerRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+        const key = toText(cell.value).trim().toLowerCase();
+        if (key) {
+          headerMap.set(key, colNumber);
+        }
+      });
+
+      const getColumnIndex = (aliases) => {
+        for (const alias of aliases) {
+          const idx = headerMap.get(alias.toLowerCase());
+          if (idx) return idx;
+        }
+        return null;
+      };
+
+      const columnIndexes = {
+        id: getColumnIndex(['id']),
+        nameAr: getColumnIndex(['namear', 'name_ar', 'الاسم (عربي)', 'الاسم العربي']),
+        nameEn: getColumnIndex(['nameen', 'name_en', 'الاسم (إنجليزي)', 'الاسم الانجليزي']),
+        price: getColumnIndex(['price', 'السعر']),
+        offerPrice: getColumnIndex(['offerprice', 'offer_price', 'سعر العرض', 'سعر العرض (اختياري)']),
+        offerMinQuantity: getColumnIndex(['offerminquantity', 'offer_min_quantity', 'الكمية لتفعيل العرض']),
+        offerEndsAt: getColumnIndex(['offerendsat', 'offer_ends_at', 'وقت انتهاء العرض', 'offer ends at']),
+        category: getColumnIndex(['category', 'القسم']),
+        descriptionAr: getColumnIndex(['descriptionar', 'description_ar', 'الوصف (عربي)']),
+        descriptionEn: getColumnIndex(['descriptionen', 'description_en', 'الوصف (إنجليزي)', 'الوصف (انجليزي)']),
+        image: getColumnIndex(['image', 'الصورة'])
+      };
+
+      const items = [];
+      for (let rowNumber = 2; rowNumber <= sheet.rowCount; rowNumber += 1) {
+        const row = sheet.getRow(rowNumber);
+
+        const item = {
+          id: columnIndexes.id ? toText(row.getCell(columnIndexes.id).value).trim() : '',
+          nameAr: columnIndexes.nameAr ? toText(row.getCell(columnIndexes.nameAr).value).trim() : '',
+          nameEn: columnIndexes.nameEn ? toText(row.getCell(columnIndexes.nameEn).value).trim() : '',
+          price: columnIndexes.price ? toText(row.getCell(columnIndexes.price).value).trim() : '',
+          offerPrice: columnIndexes.offerPrice ? toText(row.getCell(columnIndexes.offerPrice).value).trim() : '',
+          offerMinQuantity: columnIndexes.offerMinQuantity ? toText(row.getCell(columnIndexes.offerMinQuantity).value).trim() : '',
+          offerEndsAt: columnIndexes.offerEndsAt ? toIsoDate(row.getCell(columnIndexes.offerEndsAt).value) : '',
+          category: columnIndexes.category ? toText(row.getCell(columnIndexes.category).value).trim() : '',
+          descriptionAr: columnIndexes.descriptionAr ? toText(row.getCell(columnIndexes.descriptionAr).value).trim() : '',
+          descriptionEn: columnIndexes.descriptionEn ? toText(row.getCell(columnIndexes.descriptionEn).value).trim() : '',
+          image: columnIndexes.image ? toText(row.getCell(columnIndexes.image).value).trim() : ''
+        };
+
+        const hasAnyValue = Object.values(item).some((value) => String(value || '').trim() !== '');
+        if (hasAnyValue) {
+          items.push(item);
+        }
+      }
 
       if (!items.length) {
-        setFeedback({ type: 'error', title: 'ملف غير صالح', message: 'الملف لا يحتوي على منتجات.' });
+        setFeedback({ type: 'error', title: 'ملف غير صالح', message: 'ملف Excel لا يحتوي على منتجات.' });
         return;
       }
 
@@ -900,9 +1016,9 @@ const AdminDashboard = () => {
       }
 
       await fetchData();
-      setFeedback({ type: 'success', title: 'تم استيراد المنتجات', message: `مضاف: ${created} | محدث: ${updated} | متجاوز: ${skipped}` });
+      setFeedback({ type: 'success', title: 'تم استيراد المنتجات', message: `من Excel - مضاف: ${created} | محدث: ${updated} | متجاوز: ${skipped}` });
     } catch (error) {
-      setFeedback({ type: 'error', title: 'فشل استيراد المنتجات', message: error.message || 'فشل استيراد بيانات المنتجات.' });
+      setFeedback({ type: 'error', title: 'فشل استيراد المنتجات', message: error.message || 'فشل استيراد بيانات Excel للمنتجات.' });
     }
   };
 
@@ -1484,24 +1600,24 @@ const AdminDashboard = () => {
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '10px', padding: '10px' }}>
                   <button
                     type="button"
-                    onClick={exportProductsToJson}
+                    onClick={exportProductsToExcel}
                     style={{ background: '#0f766e', color: 'white', border: 'none', borderRadius: '8px', padding: '9px 14px', cursor: 'pointer', fontWeight: 700 }}
                   >
-                    تصدير المنتجات (JSON)
+                    تصدير المنتجات (Excel)
                   </button>
                   <button
                     type="button"
                     onClick={() => productsImportInputRef.current?.click()}
                     style={{ background: '#1d4ed8', color: 'white', border: 'none', borderRadius: '8px', padding: '9px 14px', cursor: 'pointer', fontWeight: 700 }}
                   >
-                    استيراد المنتجات (JSON)
+                    استيراد المنتجات (Excel)
                   </button>
                   <span style={{ color: '#9a3412', fontSize: '0.9rem', fontWeight: 700 }}>خيارات إدارة المنتجات بالجملة</span>
                   <input
                     ref={productsImportInputRef}
                     type="file"
-                    accept="application/json,.json"
-                    onChange={importProductsFromJson}
+                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    onChange={importProductsFromExcel}
                     style={{ display: 'none' }}
                   />
                 </div>
@@ -1539,8 +1655,8 @@ const AdminDashboard = () => {
                   </div>
                   <div style={{ width: '100%', marginTop: '10px' }}>
                     <button type="submit" className="btn-primary" style={{ padding: '8px 16px', marginRight: '10px' }}>{editingProductId ? 'تحديث المنتج' : 'إضافة المنتج'}</button>
-                    <button type="button" style={{ background: '#0f766e', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', marginRight: '10px', cursor: 'pointer', fontWeight: 700 }} onClick={exportProductsToJson}>تصدير المنتجات (JSON)</button>
-                    <button type="button" style={{ background: '#1d4ed8', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', marginRight: '10px', cursor: 'pointer', fontWeight: 700 }} onClick={() => productsImportInputRef.current?.click()}>استيراد المنتجات (JSON)</button>
+                    <button type="button" style={{ background: '#0f766e', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', marginRight: '10px', cursor: 'pointer', fontWeight: 700 }} onClick={exportProductsToExcel}>تصدير المنتجات (Excel)</button>
+                    <button type="button" style={{ background: '#1d4ed8', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', marginRight: '10px', cursor: 'pointer', fontWeight: 700 }} onClick={() => productsImportInputRef.current?.click()}>استيراد المنتجات (Excel)</button>
                     {editingProductId && <button type="button" className="btn-secondary" style={{ padding: '8px 16px' }} onClick={handleCancelEditProduct}>إلغاء</button>}
                   </div>
                 </form>
