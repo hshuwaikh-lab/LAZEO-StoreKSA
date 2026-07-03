@@ -8,6 +8,7 @@ import ActionBanner from '../components/ActionBanner';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { uploadFileDirect } from '../utils/directUpload';
 import { formatOfferEndsAt, isOfferActive } from '../utils/offers';
+import { DEFAULT_PRODUCT_CATEGORY, PRODUCT_CATEGORIES, getProductCategoryLabel } from '../data/productCategories';
 
 const createEmptyProductForm = () => ({
   nameAr: '',
@@ -16,7 +17,7 @@ const createEmptyProductForm = () => ({
   offerPrice: '',
   offerMinQuantity: '',
   offerEndsAt: '',
-  category: '',
+  category: DEFAULT_PRODUCT_CATEGORY,
   descriptionAr: '',
   descriptionEn: '',
   image: '',
@@ -377,10 +378,10 @@ const AdminDesktopProgram = () => {
                 <input type="number" min="2" placeholder="الكمية لتفعيل العرض" value={newProduct.offerMinQuantity} onChange={(e) => setNewProduct((prev) => ({ ...prev, offerMinQuantity: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
                 <input type="datetime-local" value={newProduct.offerEndsAt} onChange={(e) => setNewProduct((prev) => ({ ...prev, offerEndsAt: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
                 <select required value={newProduct.category} onChange={(e) => setNewProduct((prev) => ({ ...prev, category: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
-                  <option value="">اختر نوع المادة</option>
-                  {data.materials.map((material) => (
-                    <option key={material.id} value={material.id.toString()}>
-                      {material.nameAr} ({material.nameEn})
+                  <option value="">اختر القسم</option>
+                  {PRODUCT_CATEGORIES.map((category) => (
+                    <option key={category.key} value={category.key}>
+                      {category.labelAr}
                     </option>
                   ))}
                 </select>
@@ -428,7 +429,7 @@ const AdminDesktopProgram = () => {
                             </span>
                           ) : '-'}
                         </td>
-                        <td style={{ padding: '10px' }}>{product.category}</td>
+                        <td style={{ padding: '10px' }}>{getProductCategoryLabel(product.category, true)}</td>
                       </tr>
                     ))}
                     {!data.products.length && (

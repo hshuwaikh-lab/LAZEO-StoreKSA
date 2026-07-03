@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { decorateProductPricing, formatOfferEndsAt, getOfferBadgeText, getOfferLabel } from '../utils/offers';
+import { PRODUCT_CATEGORIES, getProductCategoryLabel, normalizeProductCategory } from '../data/productCategories';
 
 const Shop = () => {
   const { t, i18n } = useTranslation();
@@ -13,6 +14,7 @@ const Shop = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [selectedCategory, setSelectedCategory] = useState('all');
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -45,6 +47,40 @@ const Shop = () => {
     addToCart(product, 1);
   };
 
+  const categoryOrderMap = useMemo(() => {
+    return new Map(PRODUCT_CATEGORIES.map((category, index) => [category.key, index]));
+  }, []);
+
+  const categoryCounts = useMemo(() => {
+    const counts = Object.fromEntries(PRODUCT_CATEGORIES.map((category) => [category.key, 0]));
+    products.forEach((product) => {
+      const normalizedCategory = normalizeProductCategory(product.category);
+      if (counts[normalizedCategory] !== undefined) {
+        counts[normalizedCategory] += 1;
+      }
+    });
+    return counts;
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    const source = selectedCategory === 'all'
+      ? products
+      : products.filter((product) => normalizeProductCategory(product.category) === selectedCategory);
+
+    return [...source].sort((a, b) => {
+      const categoryA = normalizeProductCategory(a.category);
+      const categoryB = normalizeProductCategory(b.category);
+      const orderA = categoryOrderMap.has(categoryA) ? categoryOrderMap.get(categoryA) : Number.MAX_SAFE_INTEGER;
+      const orderB = categoryOrderMap.has(categoryB) ? categoryOrderMap.get(categoryB) : Number.MAX_SAFE_INTEGER;
+
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+
+      return String(isAr ? a.nameAr : a.nameEn).localeCompare(String(isAr ? b.nameAr : b.nameEn), isAr ? 'ar' : 'en');
+    });
+  }, [products, selectedCategory, categoryOrderMap, isAr]);
+
   return (
     <div className="container section" style={{ paddingBottom: '80px' }}>
       <h1 className="text-center" style={{marginBottom: '40px', fontSize: '2.5rem', color: 'var(--accent-main)'}}>{t('shop')}</h1>
@@ -54,8 +90,32 @@ const Shop = () => {
       ) : products.length === 0 ? (
         <p className="text-center">لا توجد منتجات حالياً.</p>
       ) : (
+      <>
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '22px', justifyContent: 'center' }}>
+        <button
+          type="button"
+          className={selectedCategory === 'all' ? 'btn-primary' : 'btn-secondary'}
+          onClick={() => setSelectedCategory('all')}
+        >
+          {isAr ? 'الكل' : 'All'} ({products.length})
+        </button>
+        {PRODUCT_CATEGORIES.map((category) => (
+          <button
+            key={category.key}
+            type="button"
+            className={selectedCategory === category.key ? 'btn-primary' : 'btn-secondary'}
+            onClick={() => setSelectedCategory(category.key)}
+          >
+            {isAr ? category.labelAr : category.labelEn} ({categoryCounts[category.key] || 0})
+          </button>
+        ))}
+      </div>
+
+      {filteredProducts.length === 0 ? (
+        <p className="text-center">لا توجد منتجات في هذا القسم حالياً.</p>
+      ) : (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '30px' }}>
-        {products.map((product) => {
+        {filteredProducts.map((product) => {
           const name = isAr ? product.nameAr : product.nameEn;
           const pricedProduct = decorateProductPricing(product, { referenceTime: currentTime, quantity: product.offerMinQuantity || 1 });
 
@@ -74,6 +134,9 @@ const Shop = () => {
               </div>
               <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', flex: 1 }}>
                 <h3 style={{ marginBottom: '10px', color: 'var(--text-main)', fontSize: '1.2rem', lineHeight: '1.4' }}>{name}</h3>
+                <span style={{ marginBottom: '8px', color: '#475569', fontSize: '0.85rem', fontWeight: 700 }}>
+                  {getProductCategoryLabel(product.category, isAr)}
+                </span>
                 {pricedProduct.offerActive ? (
                   <div style={{ marginTop: 'auto', marginBottom: '15px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
@@ -110,6 +173,8 @@ const Shop = () => {
           );
         })}
       </div>
+      )}
+      </>
       )}
     </div>
   );

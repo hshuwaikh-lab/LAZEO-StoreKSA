@@ -12,6 +12,7 @@ import Modal from '../components/Modal';
 import { uploadFileDirect } from '../utils/directUpload';
 import { formatOfferEndsAt, isOfferActive, toDateTimeLocalValue } from '../utils/offers';
 import { normalizeCouponCode, toDateTimeLocalValue as toCouponDateTimeLocalValue } from '../utils/coupons';
+import { DEFAULT_PRODUCT_CATEGORY, PRODUCT_CATEGORIES, getProductCategoryLabel, normalizeProductCategory } from '../data/productCategories';
 
 const createEmptyProductForm = () => ({
   nameAr: '',
@@ -20,7 +21,7 @@ const createEmptyProductForm = () => ({
   offerPrice: '',
   offerMinQuantity: '',
   offerEndsAt: '',
-  category: 'wood',
+  category: DEFAULT_PRODUCT_CATEGORY,
   descriptionAr: '',
   descriptionEn: '',
   image: ''
@@ -51,6 +52,7 @@ const AdminDashboard = () => {
   const invoiceRef = useRef(null);
   const shippingImportInputRef = useRef(null);
   const banksImportInputRef = useRef(null);
+  const productsImportInputRef = useRef(null);
   const sessionExpiredRef = useRef(false);
 
   const handleSessionExpired = useCallback(async () => {
@@ -612,6 +614,34 @@ const AdminDashboard = () => {
     downloadJsonFile(payload, `bank-accounts-${new Date().toISOString().slice(0, 10)}.json`);
   };
 
+  const exportProductsToJson = () => {
+    if (!data.products.length) {
+      setFeedback({ type: 'info', title: 'لا توجد بيانات', message: 'لا توجد منتجات للتصدير.' });
+      return;
+    }
+
+    const payload = {
+      type: 'products',
+      exportedAt: new Date().toISOString(),
+      count: data.products.length,
+      items: data.products.map((p) => ({
+        id: p.id,
+        nameAr: p.nameAr,
+        nameEn: p.nameEn,
+        price: p.price,
+        offerPrice: p.offerPrice ?? null,
+        offerMinQuantity: p.offerMinQuantity ?? null,
+        offerEndsAt: p.offerEndsAt || null,
+        category: p.category,
+        descriptionAr: p.descriptionAr,
+        descriptionEn: p.descriptionEn,
+        image: p.image || ''
+      }))
+    };
+
+    downloadJsonFile(payload, `products-${new Date().toISOString().slice(0, 10)}.json`);
+  };
+
   const importShippingFromJson = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -748,6 +778,131 @@ const AdminDashboard = () => {
       setFeedback({ type: 'success', title: 'تم استيراد البنوك', message: `مضاف: ${created} | محدث: ${updated} | متجاوز: ${skipped}` });
     } catch (error) {
       setFeedback({ type: 'error', title: 'فشل استيراد البنوك', message: error.message || 'فشل استيراد بيانات البنوك.' });
+    }
+  };
+
+  const importProductsFromJson = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setFeedback({ type: 'error', title: 'تسجيل الدخول مطلوب', message: 'يرجى تسجيل الدخول مرة أخرى.' });
+      return;
+    }
+
+    const normalizeProduct = (item) => {
+      const nameAr = String(item?.nameAr || '').trim();
+      const nameEn = String(item?.nameEn || '').trim();
+      const descriptionAr = String(item?.descriptionAr || '').trim();
+      const descriptionEn = String(item?.descriptionEn || '').trim();
+      const category = String(item?.category || '').trim();
+      const image = item?.image ? String(item.image).trim() : '';
+      const price = Number(item?.price);
+
+      if (!nameAr || !nameEn || !descriptionAr || !descriptionEn || !category) {
+        return null;
+      }
+
+      const normalizedCategory = normalizeProductCategory(category);
+
+      if (!Number.isFinite(price) || price <= 0) {
+        return null;
+      }
+
+      const hasOfferPrice = item?.offerPrice !== undefined && item?.offerPrice !== null && String(item.offerPrice).trim() !== '';
+      const offerPrice = hasOfferPrice ? Number(item.offerPrice) : null;
+
+      if (hasOfferPrice && (!Number.isFinite(offerPrice) || offerPrice <= 0 || offerPrice >= price)) {
+        return null;
+      }
+
+      const hasOfferMinQuantity = item?.offerMinQuantity !== undefined && item?.offerMinQuantity !== null && String(item.offerMinQuantity).trim() !== '';
+      const offerMinQuantity = hasOfferMinQuantity ? Number(item.offerMinQuantity) : null;
+
+      if (hasOfferMinQuantity && (!Number.isFinite(offerMinQuantity) || offerMinQuantity < 2)) {
+        return null;
+      }
+
+      if (!hasOfferPrice && (hasOfferMinQuantity || item?.offerEndsAt)) {
+        return null;
+      }
+
+      let offerEndsAt = null;
+      if (item?.offerEndsAt) {
+        const parsedDate = new Date(item.offerEndsAt);
+        if (Number.isNaN(parsedDate.getTime())) {
+          return null;
+        }
+        offerEndsAt = parsedDate.toISOString();
+      }
+
+      return {
+        nameAr,
+        nameEn,
+        price,
+        offerPrice,
+        offerMinQuantity,
+        offerEndsAt,
+        category: normalizedCategory,
+        descriptionAr,
+        descriptionEn,
+        image
+      };
+    };
+
+    try {
+      const parsed = await readJsonFile(file);
+      const items = Array.isArray(parsed)
+        ? parsed
+        : (Array.isArray(parsed?.items) ? parsed.items : []);
+
+      if (!items.length) {
+        setFeedback({ type: 'error', title: 'ملف غير صالح', message: 'الملف لا يحتوي على منتجات.' });
+        return;
+      }
+
+      const existingById = new Map(data.products.map((p) => [Number(p.id), p]));
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
+
+      for (const item of items) {
+        const normalized = normalizeProduct(item);
+        if (!normalized) {
+          skipped += 1;
+          continue;
+        }
+
+        const parsedId = Number(item?.id);
+        const hasExisting = Number.isFinite(parsedId) && existingById.has(parsedId);
+        const method = hasExisting ? 'PUT' : 'POST';
+        const endpoint = hasExisting
+          ? API_ENDPOINTS.ADMIN_PRODUCTS_DETAIL(parsedId)
+          : API_ENDPOINTS.ADMIN_PRODUCTS;
+
+        const res = await fetch(buildApiUrl(endpoint), {
+          method,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(normalized)
+        });
+
+        if (res.ok) {
+          if (hasExisting) updated += 1;
+          else created += 1;
+        } else {
+          skipped += 1;
+        }
+      }
+
+      await fetchData();
+      setFeedback({ type: 'success', title: 'تم استيراد المنتجات', message: `مضاف: ${created} | محدث: ${updated} | متجاوز: ${skipped}` });
+    } catch (error) {
+      setFeedback({ type: 'error', title: 'فشل استيراد المنتجات', message: error.message || 'فشل استيراد بيانات المنتجات.' });
     }
   };
 
@@ -1326,6 +1481,17 @@ const AdminDashboard = () => {
 
             {activeTab === 'products' && (
               <div>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                  <button type="button" className="btn-secondary" onClick={exportProductsToJson}>تصدير المنتجات (JSON)</button>
+                  <button type="button" className="btn-secondary" onClick={() => productsImportInputRef.current?.click()}>استيراد المنتجات (JSON)</button>
+                  <input
+                    ref={productsImportInputRef}
+                    type="file"
+                    accept="application/json,.json"
+                    onChange={importProductsFromJson}
+                    style={{ display: 'none' }}
+                  />
+                </div>
                 <form onSubmit={handleSaveProduct} style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', background: '#f0f4f8', padding: '15px', borderRadius: '8px' }}>
                   <input type="text" placeholder="الاسم (عربي)" required value={newProduct.nameAr} onChange={e => setNewProduct({...newProduct, nameAr: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
                   <input type="text" placeholder="الاسم (إنجليزي)" required value={newProduct.nameEn} onChange={e => setNewProduct({...newProduct, nameEn: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
@@ -1334,9 +1500,9 @@ const AdminDashboard = () => {
                   <input type="number" min="2" placeholder="الكمية لتفعيل العرض" value={newProduct.offerMinQuantity} onChange={e => setNewProduct({...newProduct, offerMinQuantity: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '170px' }} />
                   <input type="datetime-local" value={newProduct.offerEndsAt} onChange={e => setNewProduct({...newProduct, offerEndsAt: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
                   <select value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}>
-                    <option value="">اختر القسم (المادة)</option>
-                    {data.materials?.map(m => (
-                      <option key={m.id} value={m.id.toString()}>{m.nameAr} ({m.nameEn})</option>
+                    <option value="">اختر القسم</option>
+                    {PRODUCT_CATEGORIES.map((category) => (
+                      <option key={category.key} value={category.key}>{category.labelAr}</option>
                     ))}
                   </select>
                   <div style={{ width: '100%', color: '#92400e', fontSize: '0.9rem', fontWeight: 700 }}>
@@ -1380,7 +1546,7 @@ const AdminDashboard = () => {
                             </span>
                           ) : '-'}
                         </td>
-                        <td>{p.category}</td>
+                        <td>{getProductCategoryLabel(p.category, true)}</td>
                         <td>
                           <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '0.9rem', marginRight: '5px' }} onClick={() => handleEditProduct(p)}>تعديل</button>
                           <button className="btn-solid" style={{ padding: '4px 8px', fontSize: '0.9rem', background: 'red', color: 'white', border: 'none' }} onClick={() => handleDeleteProduct(p.id)}>حذف</button>
