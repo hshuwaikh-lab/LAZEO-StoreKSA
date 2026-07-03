@@ -7,18 +7,35 @@ import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { Trash2, ShoppingCart } from 'lucide-react';
 import ActionBanner from '../components/ActionBanner';
 import { getOfferLabel } from '../utils/offers';
+import { normalizeCouponCode } from '../utils/coupons';
 import './Cart.css';
 
 const Cart = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { cartItems, updateQuantity, removeFromCart, currentTotal, shippingMethod, setShippingMethod, shippingCost, finalTotal } = useCart();
+  const {
+    cartItems,
+    updateQuantity,
+    removeFromCart,
+    currentTotal,
+    discountedSubtotal,
+    couponDiscount,
+    appliedCoupon,
+    applyCoupon,
+    clearCoupon,
+    shippingMethod,
+    setShippingMethod,
+    shippingCost,
+    finalTotal,
+  } = useCart();
   const { user } = useContext(AuthContext);
   const isAr = i18n.language === 'ar';
 
   const [shippingOptions, setShippingOptions] = useState([]);
   const [loadingShipping, setLoadingShipping] = useState(true);
   const [feedback, setFeedback] = useState(null);
+  const [couponInput, setCouponInput] = useState(appliedCoupon?.code || '');
+  const [couponLoading, setCouponLoading] = useState(false);
 
   const fetchShippingOptions = useCallback(async () => {
     try {
@@ -41,6 +58,75 @@ const Cart = () => {
   useEffect(() => {
     fetchShippingOptions();
   }, [fetchShippingOptions]);
+
+  useEffect(() => {
+    if (!appliedCoupon) {
+      return;
+    }
+
+    if (currentTotal <= 0) {
+      clearCoupon();
+      return;
+    }
+
+    const validateAppliedCoupon = async () => {
+      try {
+        const response = await fetch(buildApiUrl(API_ENDPOINTS.COUPON_VALIDATE), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: appliedCoupon.code, subtotal: currentTotal })
+        });
+
+        if (!response.ok) {
+          clearCoupon();
+          return;
+        }
+
+        await response.json();
+      } catch {
+        // Keep the previous coupon state on transient network errors.
+      }
+    };
+
+    validateAppliedCoupon();
+  }, [appliedCoupon, clearCoupon, currentTotal]);
+
+  const handleApplyCoupon = async () => {
+    const normalizedCode = normalizeCouponCode(couponInput);
+    if (!normalizedCode) {
+      setFeedback({ type: 'error', title: 'كوبون غير صالح', message: 'أدخل كود الخصم أولاً.' });
+      return;
+    }
+
+    setCouponLoading(true);
+    try {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.COUPON_VALIDATE), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: normalizedCode, subtotal: currentTotal })
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.valid) {
+        setFeedback({ type: 'error', title: 'تعذر تفعيل الكوبون', message: result.error || 'الكوبون غير صالح.' });
+        return;
+      }
+
+      applyCoupon(result.coupon);
+      setCouponInput(result.coupon.code);
+      setFeedback({ type: 'success', title: 'تم تفعيل الكوبون', message: `تم خصم ${Number(result.discountAmount || 0).toFixed(2)} ر.س من السلة.` });
+    } catch {
+      setFeedback({ type: 'error', title: 'خطأ في الاتصال', message: 'تعذر التحقق من الكوبون حالياً.' });
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    clearCoupon();
+    setCouponInput('');
+    setFeedback({ type: 'info', title: 'تم إزالة الكوبون', message: 'تم إلغاء الخصم من السلة.' });
+  };
 
   const handleCheckout = () => {
     if (!user) {
@@ -174,10 +260,48 @@ const Cart = () => {
             )}
           </div>
 
+          <div style={{ marginBottom: '20px', textAlign: isAr ? 'right' : 'left' }}>
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '10px' }}>كوبون الخصم</h3>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={couponInput}
+                onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                placeholder="مثال: SAVE10"
+                style={{ padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)', flex: 1, minWidth: '180px' }}
+              />
+              <button type="button" className="btn-secondary" onClick={handleApplyCoupon} disabled={couponLoading}>
+                {couponLoading ? 'جاري التحقق...' : 'تفعيل'}
+              </button>
+              {appliedCoupon && (
+                <button type="button" className="btn-secondary" onClick={handleRemoveCoupon}>
+                  إزالة
+                </button>
+              )}
+            </div>
+            {appliedCoupon && (
+              <p style={{ marginTop: '8px', fontSize: '0.9rem', color: '#166534', fontWeight: 700 }}>
+                الكوبون النشط: {appliedCoupon.code}
+              </p>
+            )}
+          </div>
+
           <div className="summary-row">
             <span>{t('subtotal') || 'Subtotal'}</span>
             <span>{currentTotal.toFixed(2)} {t('currency') || 'SAR'}</span>
           </div>
+          {couponDiscount > 0 && (
+            <div className="summary-row" style={{ color: '#166534', fontWeight: 700 }}>
+              <span>خصم الكوبون {appliedCoupon ? `(${appliedCoupon.code})` : ''}</span>
+              <span>-{couponDiscount.toFixed(2)} {t('currency') || 'SAR'}</span>
+            </div>
+          )}
+          {couponDiscount > 0 && (
+            <div className="summary-row">
+              <span>بعد الخصم</span>
+              <span>{discountedSubtotal.toFixed(2)} {t('currency') || 'SAR'}</span>
+            </div>
+          )}
           <div className="summary-row">
             <span>{t('shipping') || 'Shipping'}</span>
             <span>{shippingCost > 0 ? `${shippingCost.toFixed(2)} ${t('currency') || 'SAR'}` : t('free') || 'Free'}</span>

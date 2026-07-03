@@ -1,5 +1,6 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import { decorateProductPricing } from '../utils/offers';
+import { calculateCouponDiscount } from '../utils/coupons';
 
 // Create a context for the shopping cart
 const CartContext = createContext();
@@ -24,6 +25,15 @@ export const CartProvider = ({ children }) => {
   }, [cartItems]);
 
   const [shippingMethod, setShippingMethod] = useState(null);
+  const [appliedCoupon, setAppliedCoupon] = useState(() => {
+    try {
+      const savedCoupon = localStorage.getItem('lazeo_coupon');
+      return savedCoupon ? JSON.parse(savedCoupon) : null;
+    } catch (e) {
+      console.error('Failed to parse coupon from local storage', e);
+      return null;
+    }
+  });
 
   const pricedCartItems = cartItems.map((item) => decorateProductPricing(item, { quantity: item.quantity }));
 
@@ -62,10 +72,24 @@ export const CartProvider = ({ children }) => {
     setCartItems([]);
   };
 
+  const applyCoupon = useCallback((coupon) => {
+    setAppliedCoupon(coupon || null);
+  }, []);
+
+  const clearCoupon = useCallback(() => {
+    setAppliedCoupon(null);
+  }, []);
+
   const currentTotal = pricedCartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+  const couponDiscount = calculateCouponDiscount({ subtotal: currentTotal, coupon: appliedCoupon });
+  const discountedSubtotal = Math.max(0, Number((currentTotal - couponDiscount).toFixed(2)));
   const shippingCost = shippingMethod ? parseFloat(shippingMethod.price) : 0;
-  const finalTotal = currentTotal + shippingCost;
+  const finalTotal = discountedSubtotal + shippingCost;
   const totalItems = pricedCartItems.reduce((total, item) => total + item.quantity, 0);
+
+  useEffect(() => {
+    localStorage.setItem('lazeo_coupon', JSON.stringify(appliedCoupon));
+  }, [appliedCoupon]);
 
   const value = {
     cartItems: pricedCartItems,
@@ -73,7 +97,12 @@ export const CartProvider = ({ children }) => {
     removeFromCart,
     updateQuantity,
     clearCart,
+    appliedCoupon,
+    applyCoupon,
+    clearCoupon,
     currentTotal,
+    couponDiscount,
+    discountedSubtotal,
     shippingMethod,
     setShippingMethod,
     shippingCost,

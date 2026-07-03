@@ -11,7 +11,18 @@ import { decorateProductPricing } from '../utils/offers';
 const Checkout = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { cartItems, currentTotal, finalTotal, shippingMethod, shippingCost, clearCart } = useCart();
+  const {
+    cartItems,
+    currentTotal,
+    discountedSubtotal,
+    couponDiscount,
+    appliedCoupon,
+    clearCoupon,
+    finalTotal,
+    shippingMethod,
+    shippingCost,
+    clearCart,
+  } = useCart();
   useContext(AuthContext);
 
   const customOrder = location.state?.customOrder || null;
@@ -118,6 +129,8 @@ const Checkout = () => {
         body: JSON.stringify({
           items: orderItems,
           totalAmount: orderSummaryAmount,
+          couponCode: isCustomOrderPayment ? null : (appliedCoupon?.code || null),
+          discountAmount: isCustomOrderPayment ? 0 : (couponDiscount || 0),
           bankId: selectedBank.id,
           receiptUrl: finalReceiptUrl,
           receiptText: finalReceiptText,
@@ -135,6 +148,7 @@ const Checkout = () => {
         });
         if (!isCustomOrderPayment) {
           clearCart();
+          clearCoupon();
         }
         setTimeout(() => navigate('/profile'), 900);
       } else {
@@ -179,6 +193,14 @@ const Checkout = () => {
         )}
         <div style={{ marginBottom: '20px', padding: '15px', background: 'rgba(0,0,0,0.03)', borderRadius: '8px' }}>
           <p>المجموع الفرعي: {isCustomOrderPayment ? `${Number(customOrder?.priceQuote || 0).toFixed(2)} ر.س` : `${currentTotal.toFixed(2)} ر.س`}</p>
+          {!isCustomOrderPayment && couponDiscount > 0 && (
+            <p style={{ color: '#166534', fontWeight: 700 }}>
+              خصم الكوبون {appliedCoupon ? `(${appliedCoupon.code})` : ''}: -{couponDiscount.toFixed(2)} ر.س
+            </p>
+          )}
+          {!isCustomOrderPayment && couponDiscount > 0 && (
+            <p>بعد الخصم: {discountedSubtotal.toFixed(2)} ر.س</p>
+          )}
           {!isCustomOrderPayment && <p>الشحن ({shippingMethod?.name || 'غير محدد'}): {shippingCost > 0 ? `${shippingCost.toFixed(2)} ر.س` : 'مجانًا'}</p>}
           <h3 style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-color)' }}>الإجمالي النهائي: {orderSummaryAmount.toFixed(2)} ر.س</h3>
         </div>

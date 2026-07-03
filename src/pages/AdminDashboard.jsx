@@ -11,6 +11,7 @@ import ActionBanner from '../components/ActionBanner';
 import Modal from '../components/Modal';
 import { uploadFileDirect } from '../utils/directUpload';
 import { formatOfferEndsAt, isOfferActive, toDateTimeLocalValue } from '../utils/offers';
+import { normalizeCouponCode, toDateTimeLocalValue as toCouponDateTimeLocalValue } from '../utils/coupons';
 
 const createEmptyProductForm = () => ({
   nameAr: '',
@@ -25,11 +26,21 @@ const createEmptyProductForm = () => ({
   image: ''
 });
 
+const createEmptyCouponForm = () => ({
+  code: '',
+  discountType: 'percent',
+  discountValue: '',
+  minOrderAmount: '',
+  maxDiscount: '',
+  expiresAt: '',
+  isActive: true,
+});
+
 const AdminDashboard = () => {
   const { logout, user } = useContext(AuthContext);
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('orders'); // users, orders, customOrders, shipping, banks, products, materials, admins, settings, invoices
-  const [data, setData] = useState({ users: [], orders: [], customOrders: [], shipping: [], banks: [], products: [], materials: [], admins: [], settings: {} });
+  const [activeTab, setActiveTab] = useState('orders'); // users, orders, customOrders, shipping, banks, products, materials, coupons, admins, settings, invoices
+  const [data, setData] = useState({ users: [], orders: [], customOrders: [], shipping: [], banks: [], products: [], materials: [], coupons: [], admins: [], settings: {} });
   const [loading, setLoading] = useState(true);
   const [printingOrder, setPrintingOrder] = useState(null);
   const [feedback, setFeedback] = useState(null);
@@ -103,6 +114,12 @@ const AdminDashboard = () => {
         if (res.ok) {
           const d = await res.json();
           setData(prev => ({ ...prev, materials: d }));
+        }
+      } else if (activeTab === 'coupons') {
+        const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_COUPONS), { headers });
+        if (res.ok) {
+          const d = await res.json();
+          setData(prev => ({ ...prev, coupons: d }));
         }
       }
     } catch (error) {
@@ -856,6 +873,8 @@ const AdminDashboard = () => {
   const [newProduct, setNewProduct] = useState(createEmptyProductForm());
   const [productImageFile, setProductImageFile] = useState(null);
   const [editingProductId, setEditingProductId] = useState(null);
+  const [newCoupon, setNewCoupon] = useState(createEmptyCouponForm());
+  const [editingCouponId, setEditingCouponId] = useState(null);
 
   const handleEditProduct = (prod) => {
     setNewProduct({
@@ -958,6 +977,104 @@ const AdminDashboard = () => {
     } catch (error) {
       console.error('Error saving product:', error);
     }
+  };
+
+  const handleEditCoupon = (coupon) => {
+    setNewCoupon({
+      code: coupon.code,
+      discountType: coupon.discountType,
+      discountValue: coupon.discountValue,
+      minOrderAmount: coupon.minOrderAmount ?? '',
+      maxDiscount: coupon.maxDiscount ?? '',
+      expiresAt: toCouponDateTimeLocalValue(coupon.expiresAt),
+      isActive: coupon.isActive,
+    });
+    setEditingCouponId(coupon.id);
+  };
+
+  const handleCancelEditCoupon = () => {
+    setNewCoupon(createEmptyCouponForm());
+    setEditingCouponId(null);
+  };
+
+  const handleSaveCoupon = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+
+    const normalizedCode = normalizeCouponCode(newCoupon.code);
+    if (!normalizedCode) {
+      setFeedback({ type: 'error', title: 'كود الكوبون مطلوب', message: 'الرجاء إدخال كود صالح.' });
+      return;
+    }
+
+    if (!newCoupon.discountValue || Number(newCoupon.discountValue) <= 0) {
+      setFeedback({ type: 'error', title: 'قيمة الخصم غير صالحة', message: 'أدخل قيمة خصم أكبر من صفر.' });
+      return;
+    }
+
+    if (newCoupon.discountType === 'percent' && Number(newCoupon.discountValue) > 100) {
+      setFeedback({ type: 'error', title: 'نسبة الخصم غير صحيحة', message: 'لا يمكن أن تتجاوز نسبة الخصم 100%.' });
+      return;
+    }
+
+    try {
+      const method = editingCouponId ? 'PUT' : 'POST';
+      const url = editingCouponId
+        ? buildApiUrl(API_ENDPOINTS.ADMIN_COUPON_DETAIL(editingCouponId))
+        : buildApiUrl(API_ENDPOINTS.ADMIN_COUPONS);
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newCoupon,
+          code: normalizedCode,
+          discountValue: Number(newCoupon.discountValue),
+          minOrderAmount: newCoupon.minOrderAmount === '' ? null : Number(newCoupon.minOrderAmount),
+          maxDiscount: newCoupon.maxDiscount === '' ? null : Number(newCoupon.maxDiscount),
+          expiresAt: newCoupon.expiresAt || null,
+        })
+      });
+
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFeedback({ type: 'error', title: 'تعذر حفظ الكوبون', message: result.error || 'فشل حفظ الكوبون.' });
+        return;
+      }
+
+      handleCancelEditCoupon();
+      fetchData();
+      setFeedback({ type: 'success', title: 'تم حفظ الكوبون', message: 'تمت إضافة/تحديث الكوبون بنجاح.' });
+    } catch (error) {
+      console.error('Error saving coupon:', error);
+      setFeedback({ type: 'error', title: 'تعذر حفظ الكوبون', message: 'حدث خطأ أثناء حفظ الكوبون.' });
+    }
+  };
+
+  const handleDeleteCoupon = async (id) => {
+    setDialog({
+      open: true,
+      title: 'تأكيد حذف الكوبون',
+      content: 'هل أنت متأكد من حذف هذا الكوبون؟',
+      mode: 'confirm',
+      confirmLabel: 'حذف',
+      onConfirm: async () => {
+        const token = localStorage.getItem('token');
+        try {
+          const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_COUPON_DETAIL(id)), {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            fetchData();
+            setFeedback({ type: 'success', title: 'تم حذف الكوبون', message: 'تم حذف الكوبون بنجاح.' });
+          }
+        } catch (error) {
+          console.error('Error deleting coupon:', error);
+          setFeedback({ type: 'error', title: 'تعذر حذف الكوبون', message: 'حدث خطأ أثناء حذف الكوبون.' });
+        }
+      }
+    });
   };
 
   const handleEditBank = (bank) => {
@@ -1089,6 +1206,7 @@ const AdminDashboard = () => {
           <button className={activeTab === 'invoices' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('invoices')}>الفواتير</button>
           <button className={activeTab === 'customOrders' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('customOrders')}>الطلبات المخصصة</button>
           <button className={activeTab === 'products' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('products')}>المنتجات</button>
+          <button className={activeTab === 'coupons' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('coupons')}>الكوبونات</button>
           <button className={activeTab === 'materials' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('materials')}>أنواع المواد</button>
           <button className={activeTab === 'shipping' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('shipping')}>طرق الشحن</button>
           <button className={activeTab === 'banks' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('banks')}>البنوك</button>
@@ -1231,7 +1349,7 @@ const AdminDashboard = () => {
                         <td>{p.nameAr}</td>
                         <td>{p.price}</td>
                         <td>
-                          {p.offerPrice && p.offerEndsAt ? (
+                          {p.offerPrice ? (
                             <span style={{ color: isOfferActive(p) ? '#166534' : '#b45309', fontWeight: 700 }}>
                               {isOfferActive(p) ? `نشط: ${p.offerPrice} ر.س` : `منتهٍ: ${p.offerPrice} ر.س`}
                               {p.offerMinQuantity ? <><br /><span style={{ color: '#92400e', fontWeight: 700 }}>من {p.offerMinQuantity} قطع</span></> : null}
@@ -1251,6 +1369,58 @@ const AdminDashboard = () => {
               </div>
             )}
 
+            {activeTab === 'coupons' && (
+              <div>
+                <form onSubmit={handleSaveCoupon} style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', background: '#f0f4f8', padding: '15px', borderRadius: '8px' }}>
+                  <input type="text" placeholder="كود الكوبون" required value={newCoupon.code} onChange={e => setNewCoupon({ ...newCoupon, code: e.target.value.toUpperCase() })} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
+                  <select value={newCoupon.discountType} onChange={e => setNewCoupon({ ...newCoupon, discountType: e.target.value })} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}>
+                    <option value="percent">نسبة مئوية %</option>
+                    <option value="fixed">خصم ثابت (ر.س)</option>
+                  </select>
+                  <input type="number" placeholder="قيمة الخصم" required value={newCoupon.discountValue} onChange={e => setNewCoupon({ ...newCoupon, discountValue: e.target.value })} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '130px' }} />
+                  <input type="number" placeholder="حد أدنى للسلة (اختياري)" value={newCoupon.minOrderAmount} onChange={e => setNewCoupon({ ...newCoupon, minOrderAmount: e.target.value })} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '190px' }} />
+                  <input type="number" placeholder="أقصى خصم (اختياري)" value={newCoupon.maxDiscount} onChange={e => setNewCoupon({ ...newCoupon, maxDiscount: e.target.value })} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '170px' }} />
+                  <input type="datetime-local" value={newCoupon.expiresAt} onChange={e => setNewCoupon({ ...newCoupon, expiresAt: e.target.value })} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input type="checkbox" checked={newCoupon.isActive} onChange={e => setNewCoupon({ ...newCoupon, isActive: e.target.checked })} />
+                    مفعل
+                  </label>
+                  <div style={{ width: '100%', marginTop: '10px' }}>
+                    <button type="submit" className="btn-primary" style={{ padding: '8px 16px', marginRight: '10px' }}>{editingCouponId ? 'تحديث الكوبون' : 'إضافة الكوبون'}</button>
+                    {editingCouponId && <button type="button" className="btn-secondary" style={{ padding: '8px 16px' }} onClick={handleCancelEditCoupon}>إلغاء</button>}
+                  </div>
+                </form>
+
+                <table style={{ width: '100%', textAlign: 'right', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #ddd' }}>
+                      <th>الكود</th><th>النوع</th><th>القيمة</th><th>الحد الأدنى</th><th>الحد الأقصى</th><th>الانتهاء</th><th>الحالة</th><th>إجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.coupons.map(coupon => (
+                      <tr key={coupon.id} style={{ borderBottom: '1px solid #ddd' }}>
+                        <td>{coupon.code}</td>
+                        <td>{coupon.discountType === 'percent' ? 'نسبة %' : 'ثابت'}</td>
+                        <td>{coupon.discountValue}</td>
+                        <td>{coupon.minOrderAmount ?? '-'}</td>
+                        <td>{coupon.maxDiscount ?? '-'}</td>
+                        <td>{coupon.expiresAt ? new Date(coupon.expiresAt).toLocaleString('ar-SA') : '-'}</td>
+                        <td style={{ color: coupon.isActive ? '#166534' : '#b91c1c', fontWeight: 700 }}>{coupon.isActive ? 'مفعل' : 'معطل'}</td>
+                        <td>
+                          <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '0.9rem', marginRight: '5px' }} onClick={() => handleEditCoupon(coupon)}>تعديل</button>
+                          <button className="btn-solid" style={{ padding: '4px 8px', fontSize: '0.9rem', background: 'red', color: 'white', border: 'none' }} onClick={() => handleDeleteCoupon(coupon.id)}>حذف</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {data.coupons.length === 0 && (
+                      <tr><td colSpan="8" style={{ padding: '12px', textAlign: 'center' }}>لا توجد كوبونات حالياً.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             {activeTab === 'orders' && (
               <div>
                 {['pending', 'execution', 'ready', 'shipped', 'delivered'].map(phase => (
@@ -1265,13 +1435,22 @@ const AdminDashboard = () => {
                     <table style={{ width: '100%', textAlign: 'right', borderCollapse: 'collapse', marginTop: '10px' }}>
                       <thead>
                         <tr style={{ borderBottom: '2px solid #ddd', background: '#f9f9f9' }}>
-                          <th>ID</th><th>العميل</th><th>المبلغ</th><th>الإيصال</th><th>التاريخ</th><th>إجراء</th>
+                          <th>ID</th><th>العميل</th><th>المبلغ</th><th>الخصم</th><th>الإيصال</th><th>التاريخ</th><th>إجراء</th>
                         </tr>
                       </thead>
                       <tbody>
                         {data.orders.filter(o => o.status === phase).map(o => (
                           <tr key={o.id} style={{ borderBottom: '1px solid #ddd' }}>
                             <td>{o.id}</td><td>{o.user?.username}</td><td>{o.totalAmount}</td>
+                            <td>
+                              {o.couponCode ? (
+                                <span style={{ color: '#166534', fontWeight: 700 }}>
+                                  {o.couponCode}
+                                  <br />
+                                  <span style={{ color: '#334155', fontWeight: 500 }}>-{Number(o.discountAmount || 0).toFixed(2)} ر.س</span>
+                                </span>
+                              ) : '-'}
+                            </td>
                             <td>
                               {o.receiptUrl && <a href={o.receiptUrl} target="_blank" rel="noreferrer" style={{marginRight: '5px'}}>صورة</a>}
                               {o.receiptText && <button className="btn-secondary" style={{padding: '2px 5px', fontSize: '0.8rem', marginRight: '5px'}} onClick={() => { setDialog({ open: true, title: `نص الإيصال #${o.id}`, content: o.receiptText, mode: 'text' }); setDialogText(o.receiptText); }}>نص</button>}

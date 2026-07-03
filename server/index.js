@@ -896,14 +896,72 @@ app.get('/api/banks', async (req, res) => {
   }
 });
 
-app.post('/api/orders', authenticateToken, async (req, res) => {
-  const { items, totalAmount, bankId, receiptUrl, receiptText } = req.body;
+app.post('/api/coupons/validate', async (req, res) => {
+  const { code, subtotal } = req.body || {};
+
   try {
+    const resolved = await resolveValidCoupon({ code, subtotal });
+    if (!resolved.valid) {
+      return res.status(400).json({ valid: false, error: resolved.reason });
+    }
+
+    return res.json({
+      valid: true,
+      coupon: {
+        id: resolved.coupon.id,
+        code: resolved.coupon.code,
+        discountType: resolved.coupon.discountType,
+        discountValue: resolved.coupon.discountValue,
+        minOrderAmount: resolved.coupon.minOrderAmount,
+        maxDiscount: resolved.coupon.maxDiscount,
+        expiresAt: resolved.coupon.expiresAt,
+      },
+      discountAmount: resolved.discountAmount,
+      finalSubtotal: resolved.finalSubtotal,
+    });
+  } catch (error) {
+    return res.status(500).json({ valid: false, error: 'Server error' });
+  }
+});
+
+app.post('/api/orders', authenticateToken, async (req, res) => {
+  const { items, totalAmount, bankId, receiptUrl, receiptText, couponCode, discountAmount } = req.body;
+  try {
+    const normalizedItems = Array.isArray(items) ? items : [];
+    const subtotalBeforeShipping = normalizedItems
+      .filter((item) => !item?.isShipping)
+      .reduce((sum, item) => {
+        const linePrice = Number(item?.price || 0);
+        const lineQuantity = Number(item?.quantity || 0);
+        return sum + (linePrice * lineQuantity);
+      }, 0);
+
+    let resolvedCouponCode = null;
+    let resolvedDiscountAmount = 0;
+
+    if (couponCode) {
+      const resolved = await resolveValidCoupon({
+        code: couponCode,
+        subtotal: subtotalBeforeShipping,
+      });
+
+      if (!resolved.valid) {
+        return res.status(400).json({ error: resolved.reason });
+      }
+
+      resolvedCouponCode = resolved.coupon.code;
+      resolvedDiscountAmount = Number(resolved.discountAmount || 0);
+    } else if (discountAmount && Number(discountAmount) > 0) {
+      return res.status(400).json({ error: 'لا يمكن إرسال خصم بدون كوبون صالح' });
+    }
+
     const newOrder = await prisma.order.create({
       data: {
         userId: req.user.id,
-        items: JSON.stringify(items),
+        items: JSON.stringify(normalizedItems),
         totalAmount: parseFloat(totalAmount),
+        couponCode: resolvedCouponCode,
+        discountAmount: resolvedDiscountAmount,
         bankId: parseInt(bankId),
         receiptUrl,
         receiptText,
@@ -990,6 +1048,86 @@ const parseOptionalOfferEndsAt = (value) => {
 
   const parsedValue = new Date(value);
   return Number.isNaN(parsedValue.getTime()) ? null : parsedValue;
+};
+
+const normalizeCouponCode = (value = '') => String(value).trim().toUpperCase();
+
+const parseCouponExpiry = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  const parsedValue = new Date(value);
+  return Number.isNaN(parsedValue.getTime()) ? null : parsedValue;
+};
+
+const calculateCouponDiscount = ({ coupon, subtotal }) => {
+  const normalizedSubtotal = Number(subtotal || 0);
+  if (!coupon || normalizedSubtotal <= 0) {
+    return 0;
+  }
+
+  if (coupon.minOrderAmount && normalizedSubtotal < Number(coupon.minOrderAmount)) {
+    return 0;
+  }
+
+  let discount = 0;
+  if (coupon.discountType === 'percent') {
+    discount = normalizedSubtotal * (Number(coupon.discountValue || 0) / 100);
+  } else {
+    discount = Number(coupon.discountValue || 0);
+  }
+
+  if (coupon.maxDiscount && discount > Number(coupon.maxDiscount)) {
+    discount = Number(coupon.maxDiscount);
+  }
+
+  if (discount > normalizedSubtotal) {
+    discount = normalizedSubtotal;
+  }
+
+  return Number(discount.toFixed(2));
+};
+
+const resolveValidCoupon = async ({ code, subtotal }) => {
+  const normalizedCode = normalizeCouponCode(code);
+  const normalizedSubtotal = Number(subtotal || 0);
+
+  if (!normalizedCode) {
+    return { valid: false, reason: 'كود الخصم مطلوب' };
+  }
+
+  if (!Number.isFinite(normalizedSubtotal) || normalizedSubtotal <= 0) {
+    return { valid: false, reason: 'قيمة السلة غير صالحة' };
+  }
+
+  const coupon = await prisma.coupon.findUnique({ where: { code: normalizedCode } });
+  if (!coupon || !coupon.isActive) {
+    return { valid: false, reason: 'كود الخصم غير صالح أو غير مفعل' };
+  }
+
+  if (coupon.expiresAt && new Date(coupon.expiresAt).getTime() <= Date.now()) {
+    return { valid: false, reason: 'انتهت صلاحية كود الخصم' };
+  }
+
+  if (coupon.minOrderAmount && normalizedSubtotal < Number(coupon.minOrderAmount)) {
+    return {
+      valid: false,
+      reason: `الحد الأدنى لتفعيل الكوبون هو ${Number(coupon.minOrderAmount).toFixed(2)} ر.س`
+    };
+  }
+
+  const discountAmount = calculateCouponDiscount({ coupon, subtotal: normalizedSubtotal });
+  if (discountAmount <= 0) {
+    return { valid: false, reason: 'لا يمكن تطبيق الكوبون على السلة الحالية' };
+  }
+
+  return {
+    valid: true,
+    coupon,
+    discountAmount,
+    finalSubtotal: Number((normalizedSubtotal - discountAmount).toFixed(2))
+  };
 };
 
 app.get('/api/products', async (req, res) => {
@@ -1151,6 +1289,111 @@ app.put('/api/admin/settings', authenticateToken, requireAdmin, async (req, res)
       });
     }
     res.json(settings);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/admin/coupons', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const coupons = await prisma.coupon.findMany({ orderBy: { createdAt: 'desc' } });
+    res.json(coupons);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/admin/coupons', authenticateToken, requireAdmin, async (req, res) => {
+  const { code, discountType, discountValue, minOrderAmount, maxDiscount, expiresAt, isActive } = req.body || {};
+  const normalizedCode = normalizeCouponCode(code);
+
+  if (!normalizedCode) {
+    return res.status(400).json({ error: 'كود الكوبون مطلوب' });
+  }
+
+  if (!['percent', 'fixed'].includes(discountType)) {
+    return res.status(400).json({ error: 'نوع الخصم غير صالح' });
+  }
+
+  const normalizedValue = Number(discountValue);
+  if (!Number.isFinite(normalizedValue) || normalizedValue <= 0) {
+    return res.status(400).json({ error: 'قيمة الخصم غير صالحة' });
+  }
+
+  if (discountType === 'percent' && normalizedValue > 100) {
+    return res.status(400).json({ error: 'نسبة الخصم يجب أن تكون بين 1 و 100' });
+  }
+
+  try {
+    const coupon = await prisma.coupon.create({
+      data: {
+        code: normalizedCode,
+        discountType,
+        discountValue: normalizedValue,
+        minOrderAmount: minOrderAmount ? Number(minOrderAmount) : null,
+        maxDiscount: maxDiscount ? Number(maxDiscount) : null,
+        expiresAt: parseCouponExpiry(expiresAt),
+        isActive: isActive !== false,
+      }
+    });
+    res.status(201).json(coupon);
+  } catch (error) {
+    if (error?.code === 'P2002') {
+      return res.status(400).json({ error: 'كود الكوبون موجود مسبقاً' });
+    }
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.put('/api/admin/coupons/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { code, discountType, discountValue, minOrderAmount, maxDiscount, expiresAt, isActive } = req.body || {};
+  const normalizedCode = normalizeCouponCode(code);
+
+  if (!normalizedCode) {
+    return res.status(400).json({ error: 'كود الكوبون مطلوب' });
+  }
+
+  if (!['percent', 'fixed'].includes(discountType)) {
+    return res.status(400).json({ error: 'نوع الخصم غير صالح' });
+  }
+
+  const normalizedValue = Number(discountValue);
+  if (!Number.isFinite(normalizedValue) || normalizedValue <= 0) {
+    return res.status(400).json({ error: 'قيمة الخصم غير صالحة' });
+  }
+
+  if (discountType === 'percent' && normalizedValue > 100) {
+    return res.status(400).json({ error: 'نسبة الخصم يجب أن تكون بين 1 و 100' });
+  }
+
+  try {
+    const coupon = await prisma.coupon.update({
+      where: { id: parseInt(id, 10) },
+      data: {
+        code: normalizedCode,
+        discountType,
+        discountValue: normalizedValue,
+        minOrderAmount: minOrderAmount ? Number(minOrderAmount) : null,
+        maxDiscount: maxDiscount ? Number(maxDiscount) : null,
+        expiresAt: parseCouponExpiry(expiresAt),
+        isActive: Boolean(isActive),
+      }
+    });
+    res.json(coupon);
+  } catch (error) {
+    if (error?.code === 'P2002') {
+      return res.status(400).json({ error: 'كود الكوبون موجود مسبقاً' });
+    }
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/admin/coupons/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    await prisma.coupon.delete({ where: { id: parseInt(id, 10) } });
+    res.json({ message: 'Coupon deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }

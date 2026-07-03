@@ -30,6 +30,8 @@ model Order {
   userId         Int
   items          String   // JSON string of items
   totalAmount    Float
+  couponCode     String?
+  discountAmount Float    @default(0)
   status         String   @default("pending") // pending, paid, shipped, delivered, rejected
   receiptUrl     String?
   receiptText    String?
@@ -40,6 +42,19 @@ model Order {
 
   user           User         @relation(fields: [userId], references: [id])
   bank           BankAccount? @relation(fields: [bankId], references: [id])
+}
+
+model Coupon {
+  id             Int      @id @default(autoincrement())
+  code           String   @unique
+  discountType   String   // percent | fixed
+  discountValue  Float
+  minOrderAmount Float?
+  maxDiscount    Float?
+  expiresAt      DateTime?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model CustomOrder {

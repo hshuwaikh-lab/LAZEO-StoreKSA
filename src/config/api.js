@@ -60,6 +60,7 @@ export const API_ENDPOINTS = {
   // Checkout
   BANKS: '/api/banks',
   ORDERS: '/api/orders',
+  COUPON_VALIDATE: '/api/coupons/validate',
   
   // Shipping
   SHIPPING: '/api/shipping',
@@ -85,6 +86,8 @@ export const API_ENDPOINTS = {
   ADMIN_MATERIALS_DETAIL: (id) => `/api/admin/materials/${id}`,
   ADMIN_SETTINGS: '/api/admin/settings',
   ADMIN_STORAGE_HEALTH: '/api/admin/storage/health',
+  ADMIN_COUPONS: '/api/admin/coupons',
+  ADMIN_COUPON_DETAIL: (id) => `/api/admin/coupons/${id}`,
 };
 
 // Helper function for API calls
