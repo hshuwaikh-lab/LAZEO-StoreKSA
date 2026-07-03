@@ -1481,9 +1481,22 @@ const AdminDashboard = () => {
 
             {activeTab === 'products' && (
               <div>
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                  <button type="button" className="btn-secondary" onClick={exportProductsToJson}>تصدير المنتجات (JSON)</button>
-                  <button type="button" className="btn-secondary" onClick={() => productsImportInputRef.current?.click()}>استيراد المنتجات (JSON)</button>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '10px', padding: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={exportProductsToJson}
+                    style={{ background: '#0f766e', color: 'white', border: 'none', borderRadius: '8px', padding: '9px 14px', cursor: 'pointer', fontWeight: 700 }}
+                  >
+                    تصدير المنتجات (JSON)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => productsImportInputRef.current?.click()}
+                    style={{ background: '#1d4ed8', color: 'white', border: 'none', borderRadius: '8px', padding: '9px 14px', cursor: 'pointer', fontWeight: 700 }}
+                  >
+                    استيراد المنتجات (JSON)
+                  </button>
+                  <span style={{ color: '#9a3412', fontSize: '0.9rem', fontWeight: 700 }}>خيارات إدارة المنتجات بالجملة</span>
                   <input
                     ref={productsImportInputRef}
                     type="file"
@@ -1526,8 +1539,8 @@ const AdminDashboard = () => {
                   </div>
                   <div style={{ width: '100%', marginTop: '10px' }}>
                     <button type="submit" className="btn-primary" style={{ padding: '8px 16px', marginRight: '10px' }}>{editingProductId ? 'تحديث المنتج' : 'إضافة المنتج'}</button>
-                    <button type="button" className="btn-secondary" style={{ padding: '8px 16px', marginRight: '10px' }} onClick={exportProductsToJson}>تصدير المنتجات (JSON)</button>
-                    <button type="button" className="btn-secondary" style={{ padding: '8px 16px', marginRight: '10px' }} onClick={() => productsImportInputRef.current?.click()}>استيراد المنتجات (JSON)</button>
+                    <button type="button" style={{ background: '#0f766e', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', marginRight: '10px', cursor: 'pointer', fontWeight: 700 }} onClick={exportProductsToJson}>تصدير المنتجات (JSON)</button>
+                    <button type="button" style={{ background: '#1d4ed8', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', marginRight: '10px', cursor: 'pointer', fontWeight: 700 }} onClick={() => productsImportInputRef.current?.click()}>استيراد المنتجات (JSON)</button>
                     {editingProductId && <button type="button" className="btn-secondary" style={{ padding: '8px 16px' }} onClick={handleCancelEditProduct}>إلغاء</button>}
                   </div>
                 </form>
