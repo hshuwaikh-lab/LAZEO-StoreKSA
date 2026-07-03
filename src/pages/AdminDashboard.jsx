@@ -872,9 +872,23 @@ const AdminDashboard = () => {
 
   const [newProduct, setNewProduct] = useState(createEmptyProductForm());
   const [productImageFile, setProductImageFile] = useState(null);
+  const [productImagePreviewUrl, setProductImagePreviewUrl] = useState('');
   const [editingProductId, setEditingProductId] = useState(null);
   const [newCoupon, setNewCoupon] = useState(createEmptyCouponForm());
   const [editingCouponId, setEditingCouponId] = useState(null);
+
+  useEffect(() => {
+    if (productImageFile) {
+      const previewObjectUrl = URL.createObjectURL(productImageFile);
+      setProductImagePreviewUrl(previewObjectUrl);
+
+      return () => {
+        URL.revokeObjectURL(previewObjectUrl);
+      };
+    }
+
+    setProductImagePreviewUrl(newProduct.image || '');
+  }, [productImageFile, newProduct.image]);
 
   const handleEditProduct = (prod) => {
     setNewProduct({
@@ -1330,10 +1344,19 @@ const AdminDashboard = () => {
                   </div>
                   <textarea placeholder="الوصف (عربي)" required value={newProduct.descriptionAr} onChange={e => setNewProduct({...newProduct, descriptionAr: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '100%', minHeight: '60px' }} />
                   <textarea placeholder="الوصف (إنجليزي)" required value={newProduct.descriptionEn} onChange={e => setNewProduct({...newProduct, descriptionEn: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '100%', minHeight: '60px' }} />
-                  <div style={{ width: '100%', display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <input type="text" placeholder="رابط الصورة (اختياري إذا تم رفع ملف)" value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', flex: 1 }} />
-                    <span>أو ارفع صورة:</span>
-                    <input type="file" accept="image/*" onChange={e => setProductImageFile(e.target.files[0])} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
+                  <div style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr 170px', gap: '12px', alignItems: 'stretch' }}>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      <input type="text" placeholder="رابط الصورة (اختياري إذا تم رفع ملف)" value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', flex: 1 }} />
+                      <span>أو ارفع صورة:</span>
+                      <input type="file" accept="image/*" onChange={e => setProductImageFile(e.target.files[0] || null)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
+                    </div>
+                    <div style={{ border: '1px dashed #94a3b8', borderRadius: '8px', background: '#fff', overflow: 'hidden', minHeight: '110px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {productImagePreviewUrl ? (
+                        <img src={productImagePreviewUrl} alt="معاينة المنتج" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>معاينة الصورة</span>
+                      )}
+                    </div>
                   </div>
                   <div style={{ width: '100%', marginTop: '10px' }}>
                     <button type="submit" className="btn-primary" style={{ padding: '8px 16px', marginRight: '10px' }}>{editingProductId ? 'تحديث المنتج' : 'إضافة المنتج'}</button>
