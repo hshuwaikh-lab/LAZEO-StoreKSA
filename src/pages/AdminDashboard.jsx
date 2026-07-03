@@ -1526,6 +1526,8 @@ const AdminDashboard = () => {
                   </div>
                   <div style={{ width: '100%', marginTop: '10px' }}>
                     <button type="submit" className="btn-primary" style={{ padding: '8px 16px', marginRight: '10px' }}>{editingProductId ? 'تحديث المنتج' : 'إضافة المنتج'}</button>
+                    <button type="button" className="btn-secondary" style={{ padding: '8px 16px', marginRight: '10px' }} onClick={exportProductsToJson}>تصدير المنتجات (JSON)</button>
+                    <button type="button" className="btn-secondary" style={{ padding: '8px 16px', marginRight: '10px' }} onClick={() => productsImportInputRef.current?.click()}>استيراد المنتجات (JSON)</button>
                     {editingProductId && <button type="button" className="btn-secondary" style={{ padding: '8px 16px' }} onClick={handleCancelEditProduct}>إلغاء</button>}
                   </div>
                 </form>
