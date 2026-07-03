@@ -6,6 +6,7 @@ import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { Copy } from 'lucide-react';
 import { uploadFileDirect } from '../utils/directUpload';
 import ActionBanner from '../components/ActionBanner';
+import { decorateProductPricing } from '../utils/offers';
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -96,8 +97,8 @@ const Checkout = () => {
             material: customOrder.material,
             details: customOrder.details
           }]
-        : (shippingMethod 
-        ? [...cartItems, { 
+        : ((shippingMethod 
+        ? [...cartItems.map((item) => decorateProductPricing(item, { quantity: item.quantity })), { 
             id: 'shipping', 
             nameEn: `Shipping: ${shippingMethod.name}`, 
             nameAr: `الشحن: ${shippingMethod.name}`, 
@@ -106,7 +107,7 @@ const Checkout = () => {
             isShipping: true,
             image: shippingMethod.logoUrl
           }]
-        : cartItems);
+        : cartItems.map((item) => decorateProductPricing(item, { quantity: item.quantity }))));
 
       const res = await fetch(buildApiUrl(API_ENDPOINTS.ORDERS), {
         method: 'POST',

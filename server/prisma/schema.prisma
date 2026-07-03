@@ -80,6 +80,9 @@ model Product {
   nameAr        String
   nameEn        String
   price         Float
+  offerPrice    Float?
+  offerMinQuantity Int?
+  offerEndsAt   DateTime?
   image         String?
   descriptionAr String
   descriptionEn String

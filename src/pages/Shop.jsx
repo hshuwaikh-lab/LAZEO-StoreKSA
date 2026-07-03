@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
+import { decorateProductPricing, formatOfferEndsAt, getOfferBadgeText, getOfferLabel } from '../utils/offers';
 
 const Shop = () => {
   const { t, i18n } = useTranslation();
@@ -11,6 +12,15 @@ const Shop = () => {
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -47,23 +57,47 @@ const Shop = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '30px' }}>
         {products.map((product) => {
           const name = isAr ? product.nameAr : product.nameEn;
+          const pricedProduct = decorateProductPricing(product, { referenceTime: currentTime, quantity: product.offerMinQuantity || 1 });
+
           return (
             <Link 
               to={`/product/${product.id}`}
               key={product.id} 
               className="glass" 
-              style={{ borderRadius: '12px', overflow: 'hidden', transition: 'transform 0.3s, box-shadow 0.3s', textDecoration: 'none', display: 'flex', flexDirection: 'column' }}
+              style={{ borderRadius: '12px', overflow: 'hidden', transition: 'transform 0.3s, box-shadow 0.3s', textDecoration: 'none', display: 'flex', flexDirection: 'column', position: 'relative', border: pricedProduct.offerActive ? '1px solid rgba(245, 158, 11, 0.3)' : 'none' }}
               onMouseOver={e => e.currentTarget.style.transform = 'translateY(-5px)'}
               onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
             >
+              {pricedProduct.offerActive && <span className="offer-badge">{getOfferBadgeText(product, isAr)}</span>}
               <div style={{ height: '240px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                  <img src={product.image} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
               <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', flex: 1 }}>
                 <h3 style={{ marginBottom: '10px', color: 'var(--text-main)', fontSize: '1.2rem', lineHeight: '1.4' }}>{name}</h3>
-                <p style={{ color: 'var(--accent-main)', fontWeight: 'bold', fontSize: '1.3rem', marginBottom: '15px', marginTop: 'auto' }}>
-                  {product.price} {t('currency') || 'SAR'}
-                </p>
+                {pricedProduct.offerActive ? (
+                  <div style={{ marginTop: 'auto', marginBottom: '15px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
+                      <span style={{ color: '#dc2626', fontWeight: 'bold', fontSize: '1.35rem' }}>
+                        {pricedProduct.price} {t('currency') || 'SAR'}
+                      </span>
+                      <span style={{ color: '#94a3b8', textDecoration: 'line-through', fontSize: '1rem' }}>
+                        {pricedProduct.originalPrice} {t('currency') || 'SAR'}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '0.85rem', color: '#b45309', fontWeight: 700 }}>
+                      {getOfferLabel(product, isAr)}
+                    </span>
+                    {product.offerEndsAt && (
+                      <span style={{ fontSize: '0.82rem', color: '#92400e', fontWeight: 700 }}>
+                        {isAr ? `ينتهي العرض: ${formatOfferEndsAt(product.offerEndsAt, 'ar-SA')}` : `Offer ends: ${formatOfferEndsAt(product.offerEndsAt, 'en-GB')}`}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p style={{ color: 'var(--accent-main)', fontWeight: 'bold', fontSize: '1.3rem', marginBottom: '15px', marginTop: 'auto' }}>
+                    {pricedProduct.price} {t('currency') || 'SAR'}
+                  </p>
+                )}
                 <button 
                   className="btn-primary" 
                   style={{ width: '100%' }}

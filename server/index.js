@@ -961,6 +961,37 @@ app.put('/api/admin/orders/:id/invoice-printed', authenticateToken, requireAdmin
 });
 
 // --- Products Routes ---
+const parseOptionalOfferPrice = (value) => {
+  if (value === '' || value === null || typeof value === 'undefined') {
+    return null;
+  }
+
+  const parsedValue = parseFloat(value);
+  return Number.isFinite(parsedValue) ? parsedValue : null;
+};
+
+const parseOptionalOfferMinQuantity = (value) => {
+  if (value === '' || value === null || typeof value === 'undefined') {
+    return null;
+  }
+
+  const parsedValue = parseInt(value, 10);
+  if (!Number.isInteger(parsedValue) || parsedValue <= 1) {
+    return null;
+  }
+
+  return parsedValue;
+};
+
+const parseOptionalOfferEndsAt = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  const parsedValue = new Date(value);
+  return Number.isNaN(parsedValue.getTime()) ? null : parsedValue;
+};
+
 app.get('/api/products', async (req, res) => {
   try {
     const products = await prisma.product.findMany({ orderBy: { createdAt: 'desc' } });
@@ -981,10 +1012,21 @@ app.get('/api/products/:id', async (req, res) => {
 });
 
 app.post('/api/admin/products', authenticateToken, requireAdmin, async (req, res) => {
-  const { nameAr, nameEn, price, image, descriptionAr, descriptionEn, category } = req.body;
+  const { nameAr, nameEn, price, offerPrice, offerMinQuantity, offerEndsAt, image, descriptionAr, descriptionEn, category } = req.body;
   try {
     const newProduct = await prisma.product.create({
-      data: { nameAr, nameEn, price: parseFloat(price), image, descriptionAr, descriptionEn, category }
+      data: {
+        nameAr,
+        nameEn,
+        price: parseFloat(price),
+        offerPrice: parseOptionalOfferPrice(offerPrice),
+        offerMinQuantity: parseOptionalOfferMinQuantity(offerMinQuantity),
+        offerEndsAt: parseOptionalOfferEndsAt(offerEndsAt),
+        image,
+        descriptionAr,
+        descriptionEn,
+        category,
+      }
     });
     res.status(201).json(newProduct);
   } catch (error) {
@@ -994,12 +1036,23 @@ app.post('/api/admin/products', authenticateToken, requireAdmin, async (req, res
 
 app.put('/api/admin/products/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const { nameAr, nameEn, price, image, descriptionAr, descriptionEn, category } = req.body;
+  const { nameAr, nameEn, price, offerPrice, offerMinQuantity, offerEndsAt, image, descriptionAr, descriptionEn, category } = req.body;
   try {
     const existingProduct = await prisma.product.findUnique({ where: { id: parseInt(id) } });
     const updatedProduct = await prisma.product.update({
       where: { id: parseInt(id) },
-      data: { nameAr, nameEn, price: parseFloat(price), image, descriptionAr, descriptionEn, category }
+      data: {
+        nameAr,
+        nameEn,
+        price: parseFloat(price),
+        offerPrice: parseOptionalOfferPrice(offerPrice),
+        offerMinQuantity: parseOptionalOfferMinQuantity(offerMinQuantity),
+        offerEndsAt: parseOptionalOfferEndsAt(offerEndsAt),
+        image,
+        descriptionAr,
+        descriptionEn,
+        category,
+      }
     });
 
     if (existingProduct?.image && image && existingProduct.image !== image) {

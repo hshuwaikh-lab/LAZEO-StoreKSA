@@ -64,6 +64,57 @@
   animation: fadeUp 1s ease 0.6s forwards;
 }
 
+.offers-section {
+  position: relative;
+}
+
+.offers-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.offers-kicker {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.offers-title {
+  margin: 0;
+  font-size: 2.3rem;
+  color: var(--text-main);
+}
+
+.offers-link {
+  color: var(--accent-main);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.offer-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f59e0b, #dc2626);
+  color: white;
+  font-weight: 800;
+  font-size: 0.85rem;
+  box-shadow: 0 12px 30px rgba(220, 38, 38, 0.22);
+}
+
 @keyframes fadeUp {
   from {
     opacity: 0;
@@ -78,4 +129,5 @@
 @media (max-width: 768px) {
   .hero-title { font-size: 2.5rem; }
   .hero-actions { flex-direction: column; padding: 0 40px; }
+  .offers-title { font-size: 1.8rem; }
 }

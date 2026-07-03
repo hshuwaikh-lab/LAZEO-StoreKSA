@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import { decorateProductPricing } from '../utils/offers';
 
 // Create a context for the shopping cart
 const CartContext = createContext();
@@ -23,6 +24,8 @@ export const CartProvider = ({ children }) => {
   }, [cartItems]);
 
   const [shippingMethod, setShippingMethod] = useState(null);
+
+  const pricedCartItems = cartItems.map((item) => decorateProductPricing(item, { quantity: item.quantity }));
 
   const addToCart = (product, quantity = 1, note = '') => {
     setCartItems(prevItems => {
@@ -59,13 +62,13 @@ export const CartProvider = ({ children }) => {
     setCartItems([]);
   };
 
-  const currentTotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+  const currentTotal = pricedCartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
   const shippingCost = shippingMethod ? parseFloat(shippingMethod.price) : 0;
   const finalTotal = currentTotal + shippingCost;
-  const totalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
+  const totalItems = pricedCartItems.reduce((total, item) => total + item.quantity, 0);
 
   const value = {
-    cartItems,
+    cartItems: pricedCartItems,
     addToCart,
     removeFromCart,
     updateQuantity,

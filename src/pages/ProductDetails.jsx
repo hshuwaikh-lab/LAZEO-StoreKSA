@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useCart } from '../context/CartContext';
 import { ArrowRight, ArrowLeft } from 'lucide-react';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
+import { decorateProductPricing, formatOfferEndsAt, getOfferBadgeText, getOfferLabel } from '../utils/offers';
 import './ProductDetails.css';
 
 const ProductDetails = () => {
@@ -18,6 +19,15 @@ const ProductDetails = () => {
   
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -54,6 +64,7 @@ const ProductDetails = () => {
   const isAr = i18n.language === 'ar';
   const name = isAr ? product.nameAr : product.nameEn;
   const description = isAr ? product.descriptionAr : product.descriptionEn;
+  const pricedProduct = decorateProductPricing(product, { referenceTime: currentTime, quantity });
 
   const increaseQty = () => setQuantity(q => q + 1);
   const decreaseQty = () => setQuantity(q => (q > 1 ? q - 1 : 1));
@@ -77,14 +88,24 @@ const ProductDetails = () => {
 
       <div className="product-details-grid">
         {/* Gallery */}
-        <div className="product-gallery">
+        <div className="product-gallery" style={{ position: 'relative' }}>
+          {pricedProduct.offerActive && <span className="offer-badge product-offer-badge">{getOfferBadgeText(product, isAr)}</span>}
           <img src={product.image} alt={name} className="product-image" />
         </div>
 
         {/* Info */}
         <div className="product-info glass" style={{borderRadius: '12px'}}>
           <h1 className="product-title">{name}</h1>
-          <div className="product-price">{product.price} {t('currency') || 'SAR'}</div>
+          {pricedProduct.offerActive ? (
+            <div className="product-price-block">
+              <div className="product-price product-price-offer">{pricedProduct.price} {t('currency') || 'SAR'}</div>
+              <div className="product-price-original">{pricedProduct.originalPrice} {t('currency') || 'SAR'}</div>
+              <div className="product-offer-meta">{pricedProduct.offerApplied ? (isAr ? 'تم تطبيق العرض على الكمية الحالية' : 'Offer applied to current quantity') : getOfferLabel(product, isAr)}</div>
+              {product.offerEndsAt && <div className="product-offer-meta">{isAr ? `العرض ينتهي في ${formatOfferEndsAt(product.offerEndsAt, 'ar-SA')}` : `Offer ends on ${formatOfferEndsAt(product.offerEndsAt, 'en-GB')}`}</div>}
+            </div>
+          ) : (
+            <div className="product-price">{pricedProduct.price} {t('currency') || 'SAR'}</div>
+          )}
           
           <div className="product-desc">
             <p>{description}</p>

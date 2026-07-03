@@ -7,6 +7,20 @@ import InvoiceTemplate from '../components/InvoiceTemplate';
 import ActionBanner from '../components/ActionBanner';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { uploadFileDirect } from '../utils/directUpload';
+import { formatOfferEndsAt, isOfferActive } from '../utils/offers';
+
+const createEmptyProductForm = () => ({
+  nameAr: '',
+  nameEn: '',
+  price: '',
+  offerPrice: '',
+  offerMinQuantity: '',
+  offerEndsAt: '',
+  category: '',
+  descriptionAr: '',
+  descriptionEn: '',
+  image: '',
+});
 
 const statusLabels = {
   pending: 'توثيق التحويل',
@@ -38,15 +52,7 @@ const AdminDesktopProgram = () => {
   const [renderingOrder, setRenderingOrder] = useState(null);
   const [feedback, setFeedback] = useState(null);
 
-  const [newProduct, setNewProduct] = useState({
-    nameAr: '',
-    nameEn: '',
-    price: '',
-    category: '',
-    descriptionAr: '',
-    descriptionEn: '',
-    image: '',
-  });
+  const [newProduct, setNewProduct] = useState(createEmptyProductForm());
   const [productImageFile, setProductImageFile] = useState(null);
 
   const fetchProgramData = useCallback(async () => {
@@ -187,6 +193,24 @@ const AdminDesktopProgram = () => {
 
     setSavingProduct(true);
 
+    if (!newProduct.offerPrice && (newProduct.offerEndsAt || newProduct.offerMinQuantity)) {
+      setFeedback({ type: 'error', title: 'بيانات العرض غير مكتملة', message: 'أدخل سعر العرض أولاً ثم أضف وقت الانتهاء أو حد الكمية إذا رغبت.' });
+      setSavingProduct(false);
+      return;
+    }
+
+    if (newProduct.offerPrice && Number(newProduct.offerPrice) >= Number(newProduct.price)) {
+      setFeedback({ type: 'error', title: 'سعر العرض غير صحيح', message: 'سعر العرض يجب أن يكون أقل من السعر الأساسي.' });
+      setSavingProduct(false);
+      return;
+    }
+
+    if (newProduct.offerMinQuantity && Number(newProduct.offerMinQuantity) <= 1) {
+      setFeedback({ type: 'error', title: 'حد الكمية غير صحيح', message: 'حد الكمية يجب أن يكون 2 أو أكثر.' });
+      setSavingProduct(false);
+      return;
+    }
+
     try {
       let imageUrl = newProduct.image;
 
@@ -201,7 +225,13 @@ const AdminDesktopProgram = () => {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...newProduct, image: imageUrl }),
+        body: JSON.stringify({
+          ...newProduct,
+          image: imageUrl,
+          offerPrice: newProduct.offerPrice === '' ? null : Number(newProduct.offerPrice),
+          offerMinQuantity: newProduct.offerMinQuantity === '' ? null : Number(newProduct.offerMinQuantity),
+          offerEndsAt: newProduct.offerEndsAt || null,
+        }),
       });
 
       if (!response.ok) {
@@ -209,15 +239,7 @@ const AdminDesktopProgram = () => {
         throw new Error(result.error || 'فشل رفع المنتج');
       }
 
-      setNewProduct({
-        nameAr: '',
-        nameEn: '',
-        price: '',
-        category: '',
-        descriptionAr: '',
-        descriptionEn: '',
-        image: '',
-      });
+      setNewProduct(createEmptyProductForm());
       setProductImageFile(null);
       await fetchProgramData();
       setFeedback({ type: 'success', title: 'تم رفع المنتج', message: 'تمت إضافة المنتج بنجاح إلى المتجر.' });
@@ -351,6 +373,9 @@ const AdminDesktopProgram = () => {
                 <input type="text" required placeholder="الاسم (عربي)" value={newProduct.nameAr} onChange={(e) => setNewProduct((prev) => ({ ...prev, nameAr: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
                 <input type="text" required placeholder="الاسم (إنجليزي)" value={newProduct.nameEn} onChange={(e) => setNewProduct((prev) => ({ ...prev, nameEn: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
                 <input type="number" required placeholder="السعر" value={newProduct.price} onChange={(e) => setNewProduct((prev) => ({ ...prev, price: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+                <input type="number" placeholder="سعر العرض (اختياري)" value={newProduct.offerPrice} onChange={(e) => setNewProduct((prev) => ({ ...prev, offerPrice: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+                <input type="number" min="2" placeholder="الكمية لتفعيل العرض" value={newProduct.offerMinQuantity} onChange={(e) => setNewProduct((prev) => ({ ...prev, offerMinQuantity: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+                <input type="datetime-local" value={newProduct.offerEndsAt} onChange={(e) => setNewProduct((prev) => ({ ...prev, offerEndsAt: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
                 <select required value={newProduct.category} onChange={(e) => setNewProduct((prev) => ({ ...prev, category: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
                   <option value="">اختر نوع المادة</option>
                   {data.materials.map((material) => (
@@ -359,6 +384,9 @@ const AdminDesktopProgram = () => {
                     </option>
                   ))}
                 </select>
+                <div style={{ gridColumn: '1 / -1', color: '#92400e', fontSize: '0.9rem', fontWeight: 700 }}>
+                  يمكن تشغيل العرض بحد كمية أو بتاريخ انتهاء أو بالاثنين معاً. إذا انتهى الوقت يختفي المنتج من قسم العروض تلقائياً.
+                </div>
                 <textarea required placeholder="الوصف (عربي)" value={newProduct.descriptionAr} onChange={(e) => setNewProduct((prev) => ({ ...prev, descriptionAr: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', minHeight: '84px', gridColumn: '1 / -1' }} />
                 <textarea required placeholder="الوصف (إنجليزي)" value={newProduct.descriptionEn} onChange={(e) => setNewProduct((prev) => ({ ...prev, descriptionEn: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', minHeight: '84px', gridColumn: '1 / -1' }} />
                 <input type="text" placeholder="رابط الصورة (اختياري)" value={newProduct.image} onChange={(e) => setNewProduct((prev) => ({ ...prev, image: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
@@ -375,6 +403,7 @@ const AdminDesktopProgram = () => {
                       <th style={{ textAlign: 'right', padding: '10px' }}>الصورة</th>
                       <th style={{ textAlign: 'right', padding: '10px' }}>الاسم</th>
                       <th style={{ textAlign: 'right', padding: '10px' }}>السعر</th>
+                      <th style={{ textAlign: 'right', padding: '10px' }}>العرض</th>
                       <th style={{ textAlign: 'right', padding: '10px' }}>التصنيف</th>
                     </tr>
                   </thead>
@@ -390,12 +419,21 @@ const AdminDesktopProgram = () => {
                         </td>
                         <td style={{ padding: '10px' }}>{product.nameAr}</td>
                         <td style={{ padding: '10px' }}>{product.price} ر.س</td>
+                        <td style={{ padding: '10px' }}>
+                          {product.offerPrice && product.offerEndsAt ? (
+                            <span style={{ color: isOfferActive(product) ? '#166534' : '#b45309', fontWeight: 700 }}>
+                              {product.offerPrice} ر.س
+                              {product.offerMinQuantity ? <><br /><span style={{ color: '#92400e', fontWeight: 700 }}>من {product.offerMinQuantity} قطع</span></> : null}
+                              {product.offerEndsAt ? <><br /><span style={{ color: '#64748b', fontWeight: 400 }}>{formatOfferEndsAt(product.offerEndsAt, 'ar-SA')}</span></> : null}
+                            </span>
+                          ) : '-'}
+                        </td>
                         <td style={{ padding: '10px' }}>{product.category}</td>
                       </tr>
                     ))}
                     {!data.products.length && (
                       <tr>
-                        <td colSpan="4" style={{ padding: '14px', textAlign: 'center', color: '#64748b' }}>
+                        <td colSpan="5" style={{ padding: '14px', textAlign: 'center', color: '#64748b' }}>
                           لا توجد منتجات حالياً.
                         </td>
                       </tr>

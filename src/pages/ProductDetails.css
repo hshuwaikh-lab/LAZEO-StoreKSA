@@ -36,6 +36,36 @@
   font-weight: 700;
 }
 
+.product-price-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.product-price-offer {
+  color: #dc2626;
+}
+
+.product-price-original {
+  color: #94a3b8;
+  font-size: 1rem;
+  text-decoration: line-through;
+  font-weight: 700;
+}
+
+.product-offer-meta {
+  color: #b45309;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.product-offer-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+}
+
 .product-desc {
   color: var(--text-light);
   line-height: 1.8;

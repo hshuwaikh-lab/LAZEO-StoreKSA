@@ -6,6 +6,7 @@ import { AuthContext } from '../context/AuthContext';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { Trash2, ShoppingCart } from 'lucide-react';
 import ActionBanner from '../components/ActionBanner';
+import { getOfferLabel } from '../utils/offers';
 import './Cart.css';
 
 const Cart = () => {
@@ -95,7 +96,25 @@ const Cart = () => {
                     <Link to={`/product/${item.id}`} style={{textDecoration: 'none'}}>
                       <h3>{name}</h3>
                     </Link>
-                    <div className="cart-item-price">{item.price} {t('currency') || 'SAR'}</div>
+                    {item.offerActive ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div className="cart-item-price">{item.price} {t('currency') || 'SAR'}</div>
+                        {item.offerApplied ? (
+                          <div style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 700 }}>
+                            {isAr ? 'تم تطبيق سعر العرض' : 'Offer price applied'}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: '0.85rem', color: '#b45309', fontWeight: 700 }}>
+                            {getOfferLabel(item, isAr)}
+                          </div>
+                        )}
+                        <div style={{ fontSize: '0.85rem', color: '#94a3b8', textDecoration: 'line-through' }}>
+                          {item.originalPrice} {t('currency') || 'SAR'}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="cart-item-price">{item.price} {t('currency') || 'SAR'}</div>
+                    )}
                     {item.note && (
                       <div style={{ marginTop: '8px', fontSize: '0.9rem', color: 'var(--text-light)' }}>
                         <strong>{t('product_note')}:</strong> {item.note}

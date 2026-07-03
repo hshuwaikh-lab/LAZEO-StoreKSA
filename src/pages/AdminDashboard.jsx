@@ -10,6 +10,20 @@ import InvoiceTemplate from '../components/InvoiceTemplate';
 import ActionBanner from '../components/ActionBanner';
 import Modal from '../components/Modal';
 import { uploadFileDirect } from '../utils/directUpload';
+import { formatOfferEndsAt, isOfferActive, toDateTimeLocalValue } from '../utils/offers';
+
+const createEmptyProductForm = () => ({
+  nameAr: '',
+  nameEn: '',
+  price: '',
+  offerPrice: '',
+  offerMinQuantity: '',
+  offerEndsAt: '',
+  category: 'wood',
+  descriptionAr: '',
+  descriptionEn: '',
+  image: ''
+});
 
 const AdminDashboard = () => {
   const { logout, user } = useContext(AuthContext);
@@ -528,7 +542,7 @@ const AdminDashboard = () => {
       try {
         const parsed = JSON.parse(String(reader.result || '{}'));
         resolve(parsed);
-      } catch (error) {
+      } catch {
         reject(new Error('الملف ليس JSON صالح'));
       }
     };
@@ -839,18 +853,29 @@ const AdminDashboard = () => {
   const [bankLogoFile, setBankLogoFile] = useState(null);
   const [editingBankId, setEditingBankId] = useState(null);
 
-  const [newProduct, setNewProduct] = useState({ nameAr: '', nameEn: '', price: '', category: 'wood', descriptionAr: '', descriptionEn: '', image: '' });
+  const [newProduct, setNewProduct] = useState(createEmptyProductForm());
   const [productImageFile, setProductImageFile] = useState(null);
   const [editingProductId, setEditingProductId] = useState(null);
 
   const handleEditProduct = (prod) => {
-    setNewProduct({ nameAr: prod.nameAr, nameEn: prod.nameEn, price: prod.price, category: prod.category, descriptionAr: prod.descriptionAr, descriptionEn: prod.descriptionEn, image: prod.image || '' });
+    setNewProduct({
+      nameAr: prod.nameAr,
+      nameEn: prod.nameEn,
+      price: prod.price,
+      offerPrice: prod.offerPrice ?? '',
+      offerMinQuantity: prod.offerMinQuantity ?? '',
+      offerEndsAt: toDateTimeLocalValue(prod.offerEndsAt),
+      category: prod.category,
+      descriptionAr: prod.descriptionAr,
+      descriptionEn: prod.descriptionEn,
+      image: prod.image || ''
+    });
     setProductImageFile(null);
     setEditingProductId(prod.id);
   };
 
   const handleCancelEditProduct = () => {
-    setNewProduct({ nameAr: '', nameEn: '', price: '', category: 'wood', descriptionAr: '', descriptionEn: '', image: '' });
+    setNewProduct(createEmptyProductForm());
     setProductImageFile(null);
     setEditingProductId(null);
   };
@@ -883,6 +908,21 @@ const AdminDashboard = () => {
     e.preventDefault();
     const token = localStorage.getItem('token');
 
+    if (!newProduct.offerPrice && (newProduct.offerEndsAt || newProduct.offerMinQuantity)) {
+      setFeedback({ type: 'error', title: 'بيانات العرض غير مكتملة', message: 'أدخل سعر العرض أولاً ثم أضف وقت الانتهاء أو حد الكمية إذا رغبت.' });
+      return;
+    }
+
+    if (newProduct.offerPrice && Number(newProduct.offerPrice) >= Number(newProduct.price)) {
+      setFeedback({ type: 'error', title: 'سعر العرض غير صحيح', message: 'سعر العرض يجب أن يكون أقل من السعر الأساسي.' });
+      return;
+    }
+
+    if (newProduct.offerMinQuantity && Number(newProduct.offerMinQuantity) <= 1) {
+      setFeedback({ type: 'error', title: 'حد الكمية غير صحيح', message: 'حد الكمية يجب أن يكون 2 أو أكثر.' });
+      return;
+    }
+
     let imageUrl = newProduct.image;
     if (productImageFile) {
       try {
@@ -903,7 +943,13 @@ const AdminDashboard = () => {
       const res = await fetch(url, {
         method,
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...newProduct, image: imageUrl })
+        body: JSON.stringify({
+          ...newProduct,
+          image: imageUrl,
+          offerPrice: newProduct.offerPrice === '' ? null : Number(newProduct.offerPrice),
+          offerMinQuantity: newProduct.offerMinQuantity === '' ? null : Number(newProduct.offerMinQuantity),
+          offerEndsAt: newProduct.offerEndsAt || null
+        })
       });
       if (res.ok) {
         handleCancelEditProduct();
@@ -1078,7 +1124,6 @@ const AdminDashboard = () => {
                             </div>
                           ) : '-'}
                         </td>
-                                {o.receiptText && <button className="btn-secondary" style={{padding: '2px 5px', fontSize: '0.8rem', marginRight: '5px'}} onClick={() => setDialog({ open: true, title: `نص الإيصال #${o.id}`, content: o.receiptText, confirmLabel: 'إغلاق', onConfirm: null })}>نص</button>}
                         <td>
                           <button className="btn-danger" onClick={() => handleDeleteUser(u.id)} style={{padding: '5px 10px', fontSize: '0.8rem', borderRadius: '4px'}}>مسح</button>
                         </td>
@@ -1153,12 +1198,18 @@ const AdminDashboard = () => {
                   <input type="text" placeholder="الاسم (عربي)" required value={newProduct.nameAr} onChange={e => setNewProduct({...newProduct, nameAr: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
                   <input type="text" placeholder="الاسم (إنجليزي)" required value={newProduct.nameEn} onChange={e => setNewProduct({...newProduct, nameEn: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
                   <input type="number" placeholder="السعر" required value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '100px' }} />
+                  <input type="number" placeholder="سعر العرض (اختياري)" value={newProduct.offerPrice} onChange={e => setNewProduct({...newProduct, offerPrice: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '160px' }} />
+                  <input type="number" min="2" placeholder="الكمية لتفعيل العرض" value={newProduct.offerMinQuantity} onChange={e => setNewProduct({...newProduct, offerMinQuantity: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '170px' }} />
+                  <input type="datetime-local" value={newProduct.offerEndsAt} onChange={e => setNewProduct({...newProduct, offerEndsAt: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
                   <select value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}>
                     <option value="">اختر القسم (المادة)</option>
                     {data.materials?.map(m => (
                       <option key={m.id} value={m.id.toString()}>{m.nameAr} ({m.nameEn})</option>
                     ))}
                   </select>
+                  <div style={{ width: '100%', color: '#92400e', fontSize: '0.9rem', fontWeight: 700 }}>
+                    يمكن ربط العرض بوقت انتهاء، أو بحد كمية، أو بالاثنين معاً. إذا انتهى الوقت يختفي من قسم العروض تلقائياً.
+                  </div>
                   <textarea placeholder="الوصف (عربي)" required value={newProduct.descriptionAr} onChange={e => setNewProduct({...newProduct, descriptionAr: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '100%', minHeight: '60px' }} />
                   <textarea placeholder="الوصف (إنجليزي)" required value={newProduct.descriptionEn} onChange={e => setNewProduct({...newProduct, descriptionEn: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '100%', minHeight: '60px' }} />
                   <div style={{ width: '100%', display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -1172,13 +1223,22 @@ const AdminDashboard = () => {
                   </div>
                 </form>
                 <table style={{ width: '100%', textAlign: 'right', borderCollapse: 'collapse' }}>
-                  <thead><tr style={{ borderBottom: '2px solid #ddd' }}><th>الصورة</th><th>الاسم (ع)</th><th>السعر</th><th>القسم</th><th>إجراء</th></tr></thead>
+                  <thead><tr style={{ borderBottom: '2px solid #ddd' }}><th>الصورة</th><th>الاسم (ع)</th><th>السعر</th><th>العرض</th><th>القسم</th><th>إجراء</th></tr></thead>
                   <tbody>
                     {data.products.map(p => (
                       <tr key={p.id} style={{ borderBottom: '1px solid #ddd' }}>
                         <td>{p.image ? <img src={p.image} alt={p.nameAr} style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} /> : '-'}</td>
                         <td>{p.nameAr}</td>
                         <td>{p.price}</td>
+                        <td>
+                          {p.offerPrice && p.offerEndsAt ? (
+                            <span style={{ color: isOfferActive(p) ? '#166534' : '#b45309', fontWeight: 700 }}>
+                              {isOfferActive(p) ? `نشط: ${p.offerPrice} ر.س` : `منتهٍ: ${p.offerPrice} ر.س`}
+                              {p.offerMinQuantity ? <><br /><span style={{ color: '#92400e', fontWeight: 700 }}>من {p.offerMinQuantity} قطع</span></> : null}
+                              {p.offerEndsAt ? <><br /><span style={{ color: '#64748b', fontWeight: 400 }}>{formatOfferEndsAt(p.offerEndsAt, 'ar-SA')}</span></> : null}
+                            </span>
+                          ) : '-'}
+                        </td>
                         <td>{p.category}</td>
                         <td>
                           <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '0.9rem', marginRight: '5px' }} onClick={() => handleEditProduct(p)}>تعديل</button>
