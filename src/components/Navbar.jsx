@@ -21,10 +21,10 @@ const Navbar = () => {
   };
 
   const navLinks = [
-    { path: '/', label: t('home') },
-    { path: '/shop', label: t('shop') },
-    { path: '/custom-order', label: t('custom_order') },
-    { path: '/our-works', label: t('our_works') }
+    { path: '/', label: t('home'), order: 1 },
+    { path: '/shop', label: t('shop'), order: 2 },
+    { path: '/custom-order', label: t('custom_order'), order: 3 },
+    { path: '/our-works', label: t('our_works'), order: 4 }
   ];
 
   return (
@@ -45,7 +45,7 @@ const Navbar = () => {
         <nav className="desktop-nav">
           <ul className="nav-list">
             {navLinks.map((link) => (
-              <li key={link.path}>
+              <li key={link.path} style={{ order: link.order }}>
                 <Link 
                   to={link.path} 
                   className={`nav-link ${location.pathname === link.path ? 'active' : ''}`}
@@ -103,7 +103,7 @@ const Navbar = () => {
       <div className={`mobile-menu ${isOpen ? 'open' : ''}`}>
         <ul className="mobile-nav-list">
           {navLinks.map((link) => (
-            <li key={link.path}>
+            <li key={link.path} style={{ order: link.order }}>
               <Link 
                 to={link.path} 
                 className={`mobile-nav-link ${location.pathname === link.path ? 'active' : ''}`}

@@ -114,9 +114,9 @@ const Home = () => {
           <h1 className="hero-title" style={{display: 'none'}}>{t('hero_title')}</h1>
           <p className="hero-subtitle" style={{marginTop: '20px'}}>{t('hero_subtitle')}</p>
           <div className="hero-actions">
-            <Link to="/shop" className="btn-primary">{t('shop_now')}</Link>
-            <Link to="/custom-order" className="btn-outline">{t('request_custom')}</Link>
-            <Link to="/our-works" className="btn-outline">{t('our_works')}</Link>
+            <Link to="/shop" className="btn-primary" style={{ order: 1 }}>{t('shop_now')}</Link>
+            <Link to="/custom-order" className="btn-outline" style={{ order: 2 }}>{t('request_custom')}</Link>
+            <Link to="/our-works" className="btn-outline" style={{ order: 3 }}>{t('our_works')}</Link>
           </div>
         </div>
       </section>

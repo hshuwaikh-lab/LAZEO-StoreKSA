@@ -43,10 +43,10 @@ const Footer = () => {
           <img src={logoUrl} alt="LAZEO Logo" style={{height: '60px', width: 'auto', objectFit: 'contain', marginBottom: '1rem'}} />
           <p>{t('hero_subtitle')}</p>
           <div className="footer-links" aria-label="روابط سريعة">
-            <Link to="/">{t('home')}</Link>
-            <Link to="/shop">{t('shop')}</Link>
-            <Link to="/custom-order">{t('custom_order')}</Link>
-            <Link to="/our-works">{t('our_works')}</Link>
+            <Link to="/" style={{ order: 1 }}>{t('home')}</Link>
+            <Link to="/shop" style={{ order: 2 }}>{t('shop')}</Link>
+            <Link to="/custom-order" style={{ order: 3 }}>{t('custom_order')}</Link>
+            <Link to="/our-works" style={{ order: 4 }}>{t('our_works')}</Link>
           </div>
           <div className="social-links" aria-label="روابط التواصل الاجتماعي">
             {normalizedWhatsapp && (
