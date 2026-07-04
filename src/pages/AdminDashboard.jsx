@@ -10,6 +10,7 @@ import InvoiceTemplate from '../components/InvoiceTemplate';
 import ActionBanner from '../components/ActionBanner';
 import Modal from '../components/Modal';
 import { uploadFileDirect } from '../utils/directUpload';
+import { getProductPrimaryImage, parseProductImageUrls, serializeProductImageUrls } from '../utils/productImages';
 import { formatOfferEndsAt, isOfferActive, toDateTimeLocalValue } from '../utils/offers';
 import { normalizeCouponCode, toDateTimeLocalValue as toCouponDateTimeLocalValue } from '../utils/coupons';
 import { DEFAULT_PRODUCT_CATEGORY, PRODUCT_CATEGORIES, getProductCategoryLabel, normalizeProductCategory } from '../data/productCategories';
@@ -53,6 +54,7 @@ const AdminDashboard = () => {
   const shippingImportInputRef = useRef(null);
   const banksImportInputRef = useRef(null);
   const productsImportInputRef = useRef(null);
+  const productImageInputRef = useRef(null);
   const sessionExpiredRef = useRef(false);
 
   const handleSessionExpired = useCallback(async () => {
@@ -1142,26 +1144,28 @@ const AdminDashboard = () => {
   const [editingBankId, setEditingBankId] = useState(null);
 
   const [newProduct, setNewProduct] = useState(createEmptyProductForm());
-  const [productImageFile, setProductImageFile] = useState(null);
-  const [productImagePreviewUrl, setProductImagePreviewUrl] = useState('');
+  const [productImageFiles, setProductImageFiles] = useState([]);
+  const [productImagePreviewUrls, setProductImagePreviewUrls] = useState([]);
   const [editingProductId, setEditingProductId] = useState(null);
   const [newCoupon, setNewCoupon] = useState(createEmptyCouponForm());
   const [editingCouponId, setEditingCouponId] = useState(null);
 
   useEffect(() => {
-    if (productImageFile) {
-      const previewObjectUrl = URL.createObjectURL(productImageFile);
-      setProductImagePreviewUrl(previewObjectUrl);
+    if (productImageFiles.length) {
+      const previewObjectUrls = productImageFiles.map((file) => URL.createObjectURL(file));
+      setProductImagePreviewUrls(previewObjectUrls);
 
       return () => {
-        URL.revokeObjectURL(previewObjectUrl);
+        previewObjectUrls.forEach((previewObjectUrl) => URL.revokeObjectURL(previewObjectUrl));
       };
     }
 
-    setProductImagePreviewUrl(newProduct.image || '');
-  }, [productImageFile, newProduct.image]);
+    setProductImagePreviewUrls(parseProductImageUrls(newProduct.image));
+  }, [productImageFiles, newProduct.image]);
 
   const handleEditProduct = (prod) => {
+    const productImageUrls = parseProductImageUrls(prod.image);
+
     setNewProduct({
       nameAr: prod.nameAr,
       nameEn: prod.nameEn,
@@ -1172,15 +1176,21 @@ const AdminDashboard = () => {
       category: prod.category,
       descriptionAr: prod.descriptionAr,
       descriptionEn: prod.descriptionEn,
-      image: prod.image || ''
+      image: productImageUrls.join('\n')
     });
-    setProductImageFile(null);
+    setProductImageFiles([]);
+    if (productImageInputRef.current) {
+      productImageInputRef.current.value = '';
+    }
     setEditingProductId(prod.id);
   };
 
   const handleCancelEditProduct = () => {
     setNewProduct(createEmptyProductForm());
-    setProductImageFile(null);
+    setProductImageFiles([]);
+    if (productImageInputRef.current) {
+      productImageInputRef.current.value = '';
+    }
     setEditingProductId(null);
   };
 
@@ -1227,16 +1237,23 @@ const AdminDashboard = () => {
       return;
     }
 
-    let imageUrl = newProduct.image;
-    if (productImageFile) {
+    const imageUrls = parseProductImageUrls(newProduct.image);
+
+    if (productImageFiles.length) {
       try {
-        const uploadData = await uploadFileDirect({ token, file: productImageFile });
-        imageUrl = uploadData.url;
+        const uploadedImageUrls = await Promise.all(productImageFiles.map(async (file) => {
+          const uploadData = await uploadFileDirect({ token, file });
+          return uploadData.url;
+        }));
+
+        imageUrls.push(...uploadedImageUrls);
       } catch {
         setFeedback({ type: 'error', title: 'فشل الرفع', message: 'حدث خطأ أثناء رفع صورة المنتج.' });
         return;
       }
     }
+
+    const imageValue = serializeProductImageUrls(imageUrls);
 
     try {
       const method = editingProductId ? 'PUT' : 'POST';
@@ -1249,7 +1266,7 @@ const AdminDashboard = () => {
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...newProduct,
-          image: imageUrl,
+          image: imageValue,
           offerPrice: newProduct.offerPrice === '' ? null : Number(newProduct.offerPrice),
           offerMinQuantity: newProduct.offerMinQuantity === '' ? null : Number(newProduct.offerMinQuantity),
           offerEndsAt: newProduct.offerEndsAt || null
@@ -1639,17 +1656,36 @@ const AdminDashboard = () => {
                   </div>
                   <textarea placeholder="الوصف (عربي)" required value={newProduct.descriptionAr} onChange={e => setNewProduct({...newProduct, descriptionAr: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '100%', minHeight: '60px' }} />
                   <textarea placeholder="الوصف (إنجليزي)" required value={newProduct.descriptionEn} onChange={e => setNewProduct({...newProduct, descriptionEn: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '100%', minHeight: '60px' }} />
-                  <div style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr 170px', gap: '12px', alignItems: 'stretch' }}>
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                      <input type="text" placeholder="رابط الصورة (اختياري إذا تم رفع ملف)" value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', flex: 1 }} />
-                      <span>أو ارفع صورة:</span>
-                      <input type="file" accept="image/*" onChange={e => setProductImageFile(e.target.files[0] || null)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
+                  <div style={{ width: '100%', display: 'grid', gridTemplateColumns: '1.2fr 170px', gap: '12px', alignItems: 'stretch' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <textarea
+                        placeholder="روابط الصور (اختياري، سطر لكل صورة)"
+                        value={newProduct.image}
+                        onChange={e => setNewProduct({...newProduct, image: e.target.value})}
+                        style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', minHeight: '92px', width: '100%', resize: 'vertical' }}
+                      />
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span>أو ارفع صور متعددة:</span>
+                        <input ref={productImageInputRef} type="file" accept="image/*" multiple onChange={e => setProductImageFiles(Array.from(e.target.files || []))} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: '#64748b' }}>يمكنك كتابة أكثر من رابط أو اختيار أكثر من ملف، وسيتم حفظها كلها كمعرض للمنتج.</div>
                     </div>
-                    <div style={{ border: '1px dashed #94a3b8', borderRadius: '8px', background: '#fff', overflow: 'hidden', minHeight: '110px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {productImagePreviewUrl ? (
-                        <img src={productImagePreviewUrl} alt="معاينة المنتج" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <div style={{ border: '1px dashed #94a3b8', borderRadius: '8px', background: '#fff', overflow: 'hidden', minHeight: '110px', padding: '8px' }}>
+                      {productImagePreviewUrls.length ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '6px' }}>
+                          {productImagePreviewUrls.slice(0, 4).map((previewUrl, index) => (
+                            <img key={`${previewUrl}-${index}`} src={previewUrl} alt={`معاينة ${index + 1}`} style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: '6px' }} />
+                          ))}
+                          {productImagePreviewUrls.length > 4 ? (
+                            <div style={{ gridColumn: '1 / -1', fontSize: '0.8rem', color: '#475569', fontWeight: 700, textAlign: 'center' }}>
+                              +{productImagePreviewUrls.length - 4} صور إضافية
+                            </div>
+                          ) : null}
+                        </div>
                       ) : (
-                        <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>معاينة الصورة</span>
+                        <div style={{ minHeight: '94px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>معاينة الصور</span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1665,7 +1701,7 @@ const AdminDashboard = () => {
                   <tbody>
                     {data.products.map(p => (
                       <tr key={p.id} style={{ borderBottom: '1px solid #ddd' }}>
-                        <td>{p.image ? <img src={p.image} alt={p.nameAr} style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} /> : '-'}</td>
+                        <td>{getProductPrimaryImage(p.image) ? <img src={getProductPrimaryImage(p.image)} alt={p.nameAr} style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} /> : '-'}</td>
                         <td>{p.nameAr}</td>
                         <td>{p.price}</td>
                         <td>

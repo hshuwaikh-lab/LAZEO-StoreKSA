@@ -143,6 +143,46 @@ function isImageUpload(contentType) {
   return String(contentType || '').toLowerCase().startsWith('image/');
 }
 
+function normalizeProductImageUrls(imageValue) {
+  if (Array.isArray(imageValue)) {
+    return imageValue.flatMap(normalizeProductImageUrls).filter(Boolean);
+  }
+
+  if (typeof imageValue !== 'string') {
+    return [];
+  }
+
+  const trimmed = imageValue.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      return parsed.flatMap(normalizeProductImageUrls).filter(Boolean);
+    }
+
+    if (typeof parsed === 'string') {
+      return [parsed.trim()].filter(Boolean);
+    }
+  } catch {
+    // Support legacy newline/comma-delimited values and plain URLs.
+  }
+
+  return trimmed
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function getRemovedProductImageUrls(previousValue, nextValue) {
+  const previousUrls = normalizeProductImageUrls(previousValue);
+  const nextUrls = new Set(normalizeProductImageUrls(nextValue));
+
+  return previousUrls.filter((url) => !nextUrls.has(url));
+}
+
 async function applyStoreLogoWatermark(fileBuffer, contentType) {
   const normalizedType = String(contentType || '').toLowerCase();
 
@@ -1254,8 +1294,9 @@ app.put('/api/admin/products/:id', authenticateToken, requireAdmin, async (req, 
       }
     });
 
-    if (existingProduct?.image && image && existingProduct.image !== image) {
-      await deleteSupabaseFileByUrl(existingProduct.image);
+    const removedImageUrls = getRemovedProductImageUrls(existingProduct?.image, image);
+    if (removedImageUrls.length) {
+      await Promise.all(removedImageUrls.map((imageUrl) => deleteSupabaseFileByUrl(imageUrl)));
     }
 
     res.json(updatedProduct);
@@ -1269,7 +1310,7 @@ app.delete('/api/admin/products/:id', authenticateToken, requireAdmin, async (re
   try {
     const product = await prisma.product.findUnique({ where: { id: parseInt(id) } });
     await prisma.product.delete({ where: { id: parseInt(id) } });
-    await deleteSupabaseFileByUrl(product?.image);
+    await Promise.all(normalizeProductImageUrls(product?.image).map((imageUrl) => deleteSupabaseFileByUrl(imageUrl)));
     res.json({ message: 'Product deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });

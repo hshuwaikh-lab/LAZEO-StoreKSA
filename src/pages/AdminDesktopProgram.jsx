@@ -7,6 +7,7 @@ import InvoiceTemplate from '../components/InvoiceTemplate';
 import ActionBanner from '../components/ActionBanner';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { uploadFileDirect } from '../utils/directUpload';
+import { getProductPrimaryImage, parseProductImageUrls, serializeProductImageUrls } from '../utils/productImages';
 import { formatOfferEndsAt, isOfferActive } from '../utils/offers';
 import { DEFAULT_PRODUCT_CATEGORY, PRODUCT_CATEGORIES, getProductCategoryLabel } from '../data/productCategories';
 
@@ -44,6 +45,7 @@ const statusColors = {
 const AdminDesktopProgram = () => {
   const navigate = useNavigate();
   const invoiceRef = useRef(null);
+  const productImageInputRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [savingProduct, setSavingProduct] = useState(false);
@@ -54,7 +56,7 @@ const AdminDesktopProgram = () => {
   const [feedback, setFeedback] = useState(null);
 
   const [newProduct, setNewProduct] = useState(createEmptyProductForm());
-  const [productImageFile, setProductImageFile] = useState(null);
+  const [productImageFiles, setProductImageFiles] = useState([]);
 
   const fetchProgramData = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -213,12 +215,18 @@ const AdminDesktopProgram = () => {
     }
 
     try {
-      let imageUrl = newProduct.image;
+      const imageUrls = parseProductImageUrls(newProduct.image);
 
-      if (productImageFile) {
-        const uploadData = await uploadFileDirect({ token, file: productImageFile });
-        imageUrl = uploadData.url;
+      if (productImageFiles.length) {
+        const uploadedImageUrls = await Promise.all(productImageFiles.map(async (file) => {
+          const uploadData = await uploadFileDirect({ token, file });
+          return uploadData.url;
+        }));
+
+        imageUrls.push(...uploadedImageUrls);
       }
+
+      const imageValue = serializeProductImageUrls(imageUrls);
 
       const response = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_PRODUCTS), {
         method: 'POST',
@@ -228,7 +236,7 @@ const AdminDesktopProgram = () => {
         },
         body: JSON.stringify({
           ...newProduct,
-          image: imageUrl,
+          image: imageValue,
           offerPrice: newProduct.offerPrice === '' ? null : Number(newProduct.offerPrice),
           offerMinQuantity: newProduct.offerMinQuantity === '' ? null : Number(newProduct.offerMinQuantity),
           offerEndsAt: newProduct.offerEndsAt || null,
@@ -241,7 +249,10 @@ const AdminDesktopProgram = () => {
       }
 
       setNewProduct(createEmptyProductForm());
-      setProductImageFile(null);
+  setProductImageFiles([]);
+      if (productImageInputRef.current) {
+        productImageInputRef.current.value = '';
+      }
       await fetchProgramData();
       setFeedback({ type: 'success', title: 'تم رفع المنتج', message: 'تمت إضافة المنتج بنجاح إلى المتجر.' });
     } catch (error) {
@@ -390,8 +401,8 @@ const AdminDesktopProgram = () => {
                 </div>
                 <textarea required placeholder="الوصف (عربي)" value={newProduct.descriptionAr} onChange={(e) => setNewProduct((prev) => ({ ...prev, descriptionAr: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', minHeight: '84px', gridColumn: '1 / -1' }} />
                 <textarea required placeholder="الوصف (إنجليزي)" value={newProduct.descriptionEn} onChange={(e) => setNewProduct((prev) => ({ ...prev, descriptionEn: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', minHeight: '84px', gridColumn: '1 / -1' }} />
-                <input type="text" placeholder="رابط الصورة (اختياري)" value={newProduct.image} onChange={(e) => setNewProduct((prev) => ({ ...prev, image: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
-                <input type="file" accept="image/*" onChange={(e) => setProductImageFile(e.target.files?.[0] || null)} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+                <textarea placeholder="روابط الصور (اختياري، سطر لكل صورة)" value={newProduct.image} onChange={(e) => setNewProduct((prev) => ({ ...prev, image: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', minHeight: '84px', gridColumn: '1 / -1' }} />
+                <input ref={productImageInputRef} type="file" accept="image/*" multiple onChange={(e) => setProductImageFiles(Array.from(e.target.files || []))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', gridColumn: '1 / -1' }} />
                 <button type="submit" className="btn-primary" disabled={savingProduct} style={{ width: 'fit-content', paddingInline: '16px' }}>
                   {savingProduct ? 'جاري الرفع...' : 'رفع المنتج'}
                 </button>
@@ -412,8 +423,8 @@ const AdminDesktopProgram = () => {
                     {data.products.slice(0, 20).map((product) => (
                       <tr key={product.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
                         <td style={{ padding: '10px' }}>
-                          {product.image ? (
-                            <img src={product.image} alt={product.nameAr} style={{ width: '42px', height: '42px', borderRadius: '6px', objectFit: 'cover' }} />
+                          {getProductPrimaryImage(product.image) ? (
+                            <img src={getProductPrimaryImage(product.image)} alt={product.nameAr} style={{ width: '42px', height: '42px', borderRadius: '6px', objectFit: 'cover' }} />
                           ) : (
                             '-'
                           )}

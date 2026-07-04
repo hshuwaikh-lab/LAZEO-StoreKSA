@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { decorateProductPricing, formatOfferEndsAt, getOfferBadgeText, getOfferLabel, isOfferActive } from '../utils/offers';
+import { getProductPrimaryImage } from '../utils/productImages';
 import logo from '/logo.png';
 import './Home.css';
 
@@ -129,7 +130,7 @@ const Home = () => {
                 >
                   <span className="offer-badge">{getOfferBadgeText(product, isAr)}</span>
                   <div style={{ height: '240px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                    <img src={product.image} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={getProductPrimaryImage(product.image)} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
                   <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', flex: 1 }}>
                     <h3 style={{ marginBottom: '10px', color: 'var(--text-main)', fontSize: '1.2rem', lineHeight: '1.4' }}>{name}</h3>
@@ -173,7 +174,7 @@ const Home = () => {
                    onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
                  >
                    <div style={{ height: '240px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                      <img src={product.image} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <img src={getProductPrimaryImage(product.image)} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                    </div>
                    <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', flex: 1 }}>
                      <h3 style={{ marginBottom: '10px', color: 'var(--text-main)', fontSize: '1.2rem', lineHeight: '1.4' }}>{name}</h3>

@@ -5,6 +5,7 @@ import { useCart } from '../context/CartContext';
 import { ArrowRight, ArrowLeft } from 'lucide-react';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { decorateProductPricing, formatOfferEndsAt, getOfferBadgeText, getOfferLabel } from '../utils/offers';
+import { getProductPrimaryImage, parseProductImageUrls } from '../utils/productImages';
 import './ProductDetails.css';
 
 const ProductDetails = () => {
@@ -20,6 +21,7 @@ const ProductDetails = () => {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -46,6 +48,10 @@ const ProductDetails = () => {
     fetchProduct();
   }, [id]);
 
+  useEffect(() => {
+    setSelectedImageIndex(0);
+  }, [product?.id]);
+
   if (loading) {
     return <div className="container section text-center">جاري التحميل...</div>;
   }
@@ -65,6 +71,8 @@ const ProductDetails = () => {
   const name = isAr ? product.nameAr : product.nameEn;
   const description = isAr ? product.descriptionAr : product.descriptionEn;
   const pricedProduct = decorateProductPricing(product, { referenceTime: currentTime, quantity });
+  const productImages = parseProductImageUrls(product.image);
+  const activeImage = productImages[selectedImageIndex] || getProductPrimaryImage(product.image);
 
   const increaseQty = () => setQuantity(q => q + 1);
   const decreaseQty = () => setQuantity(q => (q > 1 ? q - 1 : 1));
@@ -90,7 +98,25 @@ const ProductDetails = () => {
         {/* Gallery */}
         <div className="product-gallery" style={{ position: 'relative' }}>
           {pricedProduct.offerActive && <span className="offer-badge product-offer-badge">{getOfferBadgeText(product, isAr)}</span>}
-          <img src={product.image} alt={name} className="product-image" />
+          {activeImage ? (
+            <>
+              <img src={activeImage} alt={name} className="product-image" />
+              {productImages.length > 1 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(64px, 1fr))', gap: '8px', marginTop: '12px' }}>
+                  {productImages.map((imageUrl, index) => (
+                    <button
+                      key={`${imageUrl}-${index}`}
+                      type="button"
+                      onClick={() => setSelectedImageIndex(index)}
+                      style={{ border: index === selectedImageIndex ? '2px solid #0f766e' : '1px solid #cbd5e1', borderRadius: '10px', padding: '0', overflow: 'hidden', background: '#fff', cursor: 'pointer' }}
+                    >
+                      <img src={imageUrl} alt={`${name} ${index + 1}`} style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', display: 'block' }} />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : null}
         </div>
 
         {/* Info */}
