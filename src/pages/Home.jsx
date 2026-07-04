@@ -8,6 +8,21 @@ import { getProductPrimaryImage } from '../utils/productImages';
 import logo from '/logo.png';
 import './Home.css';
 
+const homepageWorks = [
+  {
+    title: 'واجهة متجر متكاملة',
+    description: 'ترتيب بصري واضح من الصفحة الرئيسية حتى صفحة المنتج والدفع.',
+  },
+  {
+    title: 'عرض منتجات ذكي',
+    description: 'صور متعددة، معاينات، وعروض تساعد العميل على اتخاذ القرار أسرع.',
+  },
+  {
+    title: 'إدارة وتشغيل',
+    description: 'تدفق طلبات، شحن، وإدارة منسقة من المكتب واللوحة.',
+  },
+];
+
 const Home = () => {
   const { t, i18n } = useTranslation();
   const { addToCart } = useCart();
@@ -100,8 +115,29 @@ const Home = () => {
           <p className="hero-subtitle" style={{marginTop: '20px'}}>{t('hero_subtitle')}</p>
           <div className="hero-actions">
             <Link to="/shop" className="btn-primary">{t('shop_now')}</Link>
+            <Link to="/our-works" className="btn-outline">أعمالنا</Link>
             <Link to="/custom-order" className="btn-outline">{t('request_custom')}</Link>
           </div>
+        </div>
+      </section>
+
+      <section className="section container works-preview-section">
+        <div className="works-preview-header">
+          <div>
+            <span className="works-preview-kicker">أعمالنا</span>
+            <h2 className="works-preview-title">نماذج من ما نبنيه للمتاجر والعلامات التجارية</h2>
+          </div>
+          <Link to="/our-works" className="works-preview-link">عرض الصفحة الكاملة</Link>
+        </div>
+
+        <div className="works-preview-grid">
+          {homepageWorks.map((work, index) => (
+            <article key={work.title} className="works-preview-card glass">
+              <div className="works-preview-card__index">0{index + 1}</div>
+              <h3>{work.title}</h3>
+              <p>{work.description}</p>
+            </article>
+          ))}
         </div>
       </section>
 

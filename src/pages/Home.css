@@ -68,6 +68,76 @@
   position: relative;
 }
 
+.works-preview-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.works-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.works-preview-kicker {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.12);
+  color: #0f766e;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.works-preview-title {
+  margin: 0;
+  font-size: 2.2rem;
+  color: var(--text-main);
+}
+
+.works-preview-link {
+  color: var(--accent-main);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.works-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.works-preview-card {
+  padding: 1.25rem;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 16px;
+}
+
+.works-preview-card__index {
+  width: fit-content;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.12);
+  color: #0f766e;
+  font-weight: 800;
+  margin-bottom: 0.9rem;
+}
+
+.works-preview-card h3 {
+  margin: 0 0 0.6rem;
+  color: var(--text-main);
+}
+
+.works-preview-card p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.7;
+}
+
 .offers-header {
   display: flex;
   justify-content: space-between;
@@ -130,4 +200,5 @@
   .hero-title { font-size: 2.5rem; }
   .hero-actions { flex-direction: column; padding: 0 40px; }
   .offers-title { font-size: 1.8rem; }
+  .works-preview-title { font-size: 1.8rem; }
 }

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import Shop from './pages/Shop';
+import OurWorks from './pages/OurWorks';
 import CustomOrder from './pages/CustomOrder';
 import ProductDetails from './pages/ProductDetails';
 import Cart from './pages/Cart';
@@ -44,6 +45,7 @@ function App() {
               <Route path="/unlock" element={<DesktopUnlock />} />
               <Route path="/" element={<Home />} />
               <Route path="/shop" element={<Shop />} />
+              <Route path="/our-works" element={<OurWorks />} />
               <Route path="/custom-order" element={<CustomOrder />} />
               <Route path="/product/:id" element={<ProductDetails />} />
               <Route path="/cart" element={<Cart />} />
