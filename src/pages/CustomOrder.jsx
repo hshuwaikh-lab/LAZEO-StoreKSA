@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AuthContext } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { uploadFileDirect } from '../utils/directUpload';
 import ActionBanner from '../components/ActionBanner';
@@ -10,6 +10,7 @@ const CustomOrder = () => {
   const { t, i18n } = useTranslation();
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [materials, setMaterials] = useState([]);
   const [formData, setFormData] = useState({
@@ -34,6 +35,24 @@ const CustomOrder = () => {
     };
     fetchMaterials();
   }, []);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const project = searchParams.get('project');
+
+    if (project) {
+      setFormData(prev => {
+        if (prev.details.trim()) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          details: `أرغب في تنفيذ مشروع مشابه لـ ${project}.`,
+        };
+      });
+    }
+  }, [location.search]);
   const [inputType, setInputType] = useState('image');
   const [file, setFile] = useState(null);
   const [attachmentText, setAttachmentText] = useState('');
