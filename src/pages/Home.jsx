@@ -115,8 +115,8 @@ const Home = () => {
           <p className="hero-subtitle" style={{marginTop: '20px'}}>{t('hero_subtitle')}</p>
           <div className="hero-actions">
             <Link to="/shop" className="btn-primary">{t('shop_now')}</Link>
-            <Link to="/our-works" className="btn-outline">{t('our_works')}</Link>
             <Link to="/custom-order" className="btn-outline">{t('request_custom')}</Link>
+            <Link to="/our-works" className="btn-outline">{t('our_works')}</Link>
           </div>
         </div>
       </section>

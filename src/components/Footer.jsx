@@ -45,8 +45,8 @@ const Footer = () => {
           <div className="footer-links" aria-label="روابط سريعة">
             <Link to="/">{t('home')}</Link>
             <Link to="/shop">{t('shop')}</Link>
-            <Link to="/our-works">{t('our_works')}</Link>
             <Link to="/custom-order">{t('custom_order')}</Link>
+            <Link to="/our-works">{t('our_works')}</Link>
           </div>
           <div className="social-links" aria-label="روابط التواصل الاجتماعي">
             {normalizedWhatsapp && (

@@ -23,8 +23,8 @@ const Navbar = () => {
   const navLinks = [
     { path: '/', label: t('home') },
     { path: '/shop', label: t('shop') },
-    { path: '/our-works', label: t('our_works') },
-    { path: '/custom-order', label: t('custom_order') }
+    { path: '/custom-order', label: t('custom_order') },
+    { path: '/our-works', label: t('our_works') }
   ];
 
   return (
