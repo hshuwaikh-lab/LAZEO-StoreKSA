@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import './Footer.css';
 
@@ -41,6 +42,12 @@ const Footer = () => {
         <div className="footer-brand">
           <img src={logoUrl} alt="LAZEO Logo" style={{height: '60px', width: 'auto', objectFit: 'contain', marginBottom: '1rem'}} />
           <p>{t('hero_subtitle')}</p>
+          <div className="footer-links" aria-label="روابط سريعة">
+            <Link to="/">{t('home')}</Link>
+            <Link to="/shop">{t('shop')}</Link>
+            <Link to="/our-works">{t('our_works')}</Link>
+            <Link to="/custom-order">{t('custom_order')}</Link>
+          </div>
           <div className="social-links" aria-label="روابط التواصل الاجتماعي">
             {normalizedWhatsapp && (
               <a

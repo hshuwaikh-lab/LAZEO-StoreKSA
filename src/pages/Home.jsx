@@ -115,7 +115,7 @@ const Home = () => {
           <p className="hero-subtitle" style={{marginTop: '20px'}}>{t('hero_subtitle')}</p>
           <div className="hero-actions">
             <Link to="/shop" className="btn-primary">{t('shop_now')}</Link>
-            <Link to="/our-works" className="btn-outline">أعمالنا</Link>
+            <Link to="/our-works" className="btn-outline">{t('our_works')}</Link>
             <Link to="/custom-order" className="btn-outline">{t('request_custom')}</Link>
           </div>
         </div>
@@ -124,7 +124,7 @@ const Home = () => {
       <section className="section container works-preview-section">
         <div className="works-preview-header">
           <div>
-            <span className="works-preview-kicker">أعمالنا</span>
+            <span className="works-preview-kicker">{t('our_works')}</span>
             <h2 className="works-preview-title">نماذج من ما نبنيه للمتاجر والعلامات التجارية</h2>
           </div>
           <Link to="/our-works" className="works-preview-link">عرض الصفحة الكاملة</Link>

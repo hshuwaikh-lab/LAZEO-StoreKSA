@@ -7,6 +7,7 @@ const resources = {
     translation: {
       "home": "الرئيسية",
       "shop": "تسوق",
+      "our_works": "أعمالنا",
       "custom_order": "طلب مخصص",
       "cart": "السلة",
       "hero_title": "أناقة الحفر الفاخر",
@@ -44,6 +45,7 @@ const resources = {
     translation: {
       "home": "Home",
       "shop": "Shop",
+      "our_works": "Our Works",
       "custom_order": "Custom Order",
       "cart": "Cart",
       "hero_title": "Premium Laser Engraving",
