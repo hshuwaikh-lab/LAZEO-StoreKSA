@@ -1146,6 +1146,7 @@ const AdminDashboard = () => {
   const [newProduct, setNewProduct] = useState(createEmptyProductForm());
   const [productImageFiles, setProductImageFiles] = useState([]);
   const [productImagePreviewUrls, setProductImagePreviewUrls] = useState([]);
+  const [productImageApplyWatermark, setProductImageApplyWatermark] = useState(true);
   const [editingProductId, setEditingProductId] = useState(null);
   const [newCoupon, setNewCoupon] = useState(createEmptyCouponForm());
   const [editingCouponId, setEditingCouponId] = useState(null);
@@ -1242,7 +1243,7 @@ const AdminDashboard = () => {
     if (productImageFiles.length) {
       try {
         const uploadedImageUrls = await Promise.all(productImageFiles.map(async (file) => {
-          const uploadData = await uploadFileDirect({ token, file });
+          const uploadData = await uploadFileDirect({ token, file, applyWatermark: productImageApplyWatermark });
           return uploadData.url;
         }));
 
@@ -1667,6 +1668,10 @@ const AdminDashboard = () => {
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                         <span>أو ارفع صور متعددة:</span>
                         <input ref={productImageInputRef} type="file" accept="image/*" multiple onChange={e => setProductImageFiles(Array.from(e.target.files || []))} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', userSelect: 'none', background: productImageApplyWatermark ? '#1d4ed8' : '#e2e8f0', color: productImageApplyWatermark ? '#fff' : '#334155', border: 'none', borderRadius: '6px', padding: '6px 14px', fontWeight: 700, fontSize: '0.88rem', transition: 'background 0.2s' }}>
+                          <input type="checkbox" checked={productImageApplyWatermark} onChange={e => setProductImageApplyWatermark(e.target.checked)} style={{ display: 'none' }} />
+                          {productImageApplyWatermark ? '✔ وتر مارك مفعّل' : '✗ وتر مارك معطّل'}
+                        </label>
                       </div>
                       <div style={{ fontSize: '0.85rem', color: '#64748b' }}>يمكنك كتابة أكثر من رابط أو اختيار أكثر من ملف، وسيتم حفظها كلها كمعرض للمنتج.</div>
                     </div>

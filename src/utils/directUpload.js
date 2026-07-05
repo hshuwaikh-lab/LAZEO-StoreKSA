@@ -87,7 +87,7 @@ const uploadWithLegacyApi = async (token, file) => {
   return { url: uploadData.url, storageMode: uploadData.storageMode || 'api-upload' };
 };
 
-export const uploadFileDirect = async ({ token, file }) => {
+export const uploadFileDirect = async ({ token, file, applyWatermark = true }) => {
   if (!token) throw new Error('Missing auth token');
   if (!file) throw new Error('Missing file');
 
@@ -95,7 +95,7 @@ export const uploadFileDirect = async ({ token, file }) => {
 
   if (normalizedType.startsWith('image/')) {
     try {
-      const watermarkedFile = await createWatermarkedImageFile(file);
+      const watermarkedFile = applyWatermark ? await createWatermarkedImageFile(file) : null;
       if (!watermarkedFile) {
         return uploadWithLegacyApi(token, file);
       }
