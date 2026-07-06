@@ -129,11 +129,10 @@ const Cart = () => {
       };
 
       setShippingMethod(estimatedMethod);
-      const isFallbackMode = String(estimatedMethod.estimationMode || '').startsWith('fallback');
       setFeedback({
-        type: isFallbackMode ? 'info' : 'success',
-        title: isFallbackMode ? 'تم اعتماد الشحن الثابت' : 'تم تقدير الشحن',
-        message: isFallbackMode
+        type: estimatedMethod.estimationMode === 'fallback-no-city' ? 'info' : 'success',
+        title: estimatedMethod.estimationMode === 'fallback-no-city' ? 'تم اعتماد الشحن الثابت' : 'تم تقدير الشحن',
+        message: estimatedMethod.estimationMode === 'fallback-no-city'
           ? (result.warning || `تم اعتماد ${estimatedMethod.shippingProviderLabel} بالسعر الثابت ${Math.round(estimatedMethod.price)} ر.س.`)
           : (estimatedMethod.isCarrierFixedPrice
             ? `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم. تم التحويل تلقائيًا إلى ${estimatedMethod.shippingProviderLabel} بسعر ثابت ${Math.round(estimatedMethod.price)} ر.س.`
