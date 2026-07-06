@@ -180,77 +180,36 @@ const CITY_COORDINATES = {
 
 const CITY_ALIASES = {
   'الرياض': 'riyadh',
-  'منطقة الرياض': 'riyadh',
-  'riyadh': 'riyadh',
   'جدة': 'jeddah',
   'جده': 'jeddah',
-  'jeddah': 'jeddah',
   'مكة': 'mecca',
   'مكه': 'mecca',
-  'مكة المكرمة': 'mecca',
-  'mecca': 'mecca',
-  'makkah': 'mecca',
   'المدينة': 'medina',
   'المدينة المنورة': 'medina',
-  'المدينة المنوره': 'medina',
-  'منطقة المدينة المنورة': 'medina',
-  'medina': 'medina',
-  'madinah': 'medina',
   'الدمام': 'dammam',
-  'المنطقة الشرقية': 'dammam',
-  'الشرقية': 'dammam',
-  'dammam': 'dammam',
   'الخبر': 'khobar',
-  'الخبر الشرقية': 'khobar',
-  'khobar': 'khobar',
-  'al khobar': 'khobar',
   'الظهران': 'dhahran',
-  'dhahran': 'dhahran',
   'الطائف': 'taif',
-  'taif': 'taif',
   'تبوك': 'tabuk',
-  'tabuk': 'tabuk',
   'أبها': 'abha',
   'ابها': 'abha',
-  'abha': 'abha',
   'حائل': 'hail',
-  'hail': 'hail',
   'القصيم': 'qassim',
-  'qassim': 'qassim',
   'بريدة': 'buraidah',
-  'buraidah': 'buraidah',
   'عنيزة': 'unaizah',
-  'unaizah': 'unaizah',
   'نجران': 'najran',
-  'najran': 'najran',
   'جازان': 'jazan',
-  'jazan': 'jazan',
-  'jizan': 'jazan',
   'الباحة': 'albahah',
-  'al bahah': 'albahah',
-  'albahah': 'albahah',
   'الجوف': 'jouf',
-  'jouf': 'jouf',
-  'al jouf': 'jouf',
   'سكاكا': 'sakaka',
-  'sakaka': 'sakaka',
   'عرعر': 'arar',
-  'arar': 'arar',
   'ينبع': 'yanbu',
-  'yanbu': 'yanbu',
   'الجبيل': 'jubail',
-  'jubail': 'jubail',
   'الخرج': 'alkharj',
-  'alkharj': 'alkharj',
-  'al kharj': 'alkharj',
   'الأحساء': 'ahsa',
   'الاحساء': 'ahsa',
-  'ahsa': 'ahsa',
-  'al ahsa': 'ahsa',
   'الهفوف': 'hofuf',
-  'hofuf': 'hofuf',
-  'القطيف': 'qatif',
-  'qatif': 'qatif'
+  'القطيف': 'qatif'
 };
 
 const POSTAL_PREFIX_CITY = {
@@ -286,29 +245,10 @@ function normalizeAddressText(value) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
-function normalizeArabicDigits(value) {
-  return String(value || '')
-    .replace(/[\u0660-\u0669]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
-    .replace(/[\u06f0-\u06f9]/g, (digit) => String(digit.charCodeAt(0) - 0x06f0));
-}
-
-function compactAddressText(value) {
-  return normalizeAddressText(value).replace(/[\s\-_/.,]+/g, '');
-}
-
 function resolveCityKey({ city, nationalAddress, postalCode }) {
   const normalizedCity = normalizeAddressText(city);
   if (CITY_COORDINATES[normalizedCity]) {
     return normalizedCity;
-  }
-
-  const compactCity = compactAddressText(city);
-  if (compactCity) {
-    const compactCoordinateKey = Object.keys(CITY_COORDINATES)
-      .find((key) => compactAddressText(key) === compactCity);
-    if (compactCoordinateKey) {
-      return compactCoordinateKey;
-    }
   }
 
   const aliasKey = Object.keys(CITY_ALIASES).find((label) => normalizeAddressText(label) === normalizedCity);
@@ -316,42 +256,13 @@ function resolveCityKey({ city, nationalAddress, postalCode }) {
     return CITY_ALIASES[aliasKey];
   }
 
-  if (compactCity) {
-    const compactAliasKey = Object.keys(CITY_ALIASES)
-      .find((label) => compactAddressText(label) === compactCity);
-    if (compactAliasKey) {
-      return CITY_ALIASES[compactAliasKey];
-    }
-  }
-
   const normalizedAddress = normalizeAddressText(nationalAddress);
-  const compactNationalAddress = compactAddressText(nationalAddress);
   const matchedAlias = Object.entries(CITY_ALIASES).find(([label]) => normalizedAddress.includes(normalizeAddressText(label)));
   if (matchedAlias) {
     return matchedAlias[1];
   }
 
-  const matchedCompactAlias = Object.entries(CITY_ALIASES)
-    .find(([label]) => compactNationalAddress.includes(compactAddressText(label)));
-  if (matchedCompactAlias) {
-    return matchedCompactAlias[1];
-  }
-
-  const matchedCityKey = Object.keys(CITY_COORDINATES)
-    .find((key) => normalizedAddress.includes(key) || compactNationalAddress.includes(compactAddressText(key)));
-  if (matchedCityKey) {
-    return matchedCityKey;
-  }
-
-  let normalizedPostal = normalizeArabicDigits(String(postalCode || '')).replace(/\D/g, '');
-  if (normalizedPostal.length < 2) {
-    const normalizedAddressWithDigits = normalizeArabicDigits(nationalAddress);
-    const postalMatch = normalizedAddressWithDigits.match(/\b(\d{5})\b/);
-    if (postalMatch) {
-      normalizedPostal = postalMatch[1];
-    }
-  }
-
+  const normalizedPostal = String(postalCode || '').trim();
   const prefix = normalizedPostal.slice(0, 2);
   if (POSTAL_PREFIX_CITY[prefix]) {
     return POSTAL_PREFIX_CITY[prefix];
@@ -1289,13 +1200,14 @@ app.post('/api/shipping/estimate', async (req, res) => {
   try {
     const settings = await prisma.storeSettings.findFirst();
     const estimatorConfig = buildShippingEstimatorConfig(settings);
-    const fallbackCarrierPrice = Math.round(Number(estimatorConfig.carrierFixedPrice || 35));
-    const fallbackProvider = estimatorConfig.carrierProvider;
-    const fallbackProviderLabel = getCarrierProviderLabel(fallbackProvider);
     const cityKey = resolveCityKey({ city, nationalAddress, postalCode });
     const destination = cityKey ? CITY_COORDINATES[cityKey] : null;
 
     if (!destination) {
+      const fallbackCarrierPrice = Math.round(Number(estimatorConfig.carrierFixedPrice || 35));
+      const fallbackProvider = estimatorConfig.carrierProvider;
+      const fallbackProviderLabel = getCarrierProviderLabel(fallbackProvider);
+
       return res.json({
         shippingType: 'delivery',
         cityKey: null,
@@ -1309,31 +1221,12 @@ app.post('/api/shipping/estimate', async (req, res) => {
         carrierFixedPrice: fallbackCarrierPrice,
         estimatedDays: '3-5 أيام',
         estimationMode: 'fallback-no-city',
-        warning: `تعذر تحديد المسافة من العنوان الوطني، تم اعتماد شحن ${fallbackProviderLabel} بالسعر الثابت.`,
+        warning: `تعذر تحديد المدينة من العنوان الوطني، تم اعتماد شحن ${fallbackProviderLabel} بالسعر الثابت.`,
         currency: 'SAR'
       });
     }
 
     const distanceKm = Number(haversineDistanceKm(estimatorConfig.storeCoordinates, destination).toFixed(2));
-    if (!Number.isFinite(distanceKm) || distanceKm < 0) {
-      return res.json({
-        shippingType: 'delivery',
-        cityKey,
-        distanceKm: null,
-        shippingCost: fallbackCarrierPrice,
-        estimatedShippingCost: fallbackCarrierPrice,
-        isCarrierFixedPrice: true,
-        shippingProvider: fallbackProvider,
-        shippingProviderLabel: fallbackProviderLabel,
-        carrierThreshold: Number(estimatorConfig.carrierThreshold || 0),
-        carrierFixedPrice: fallbackCarrierPrice,
-        estimatedDays: '3-5 أيام',
-        estimationMode: 'fallback-no-distance',
-        warning: `تعذر تحديد المسافة بدقة، تم اعتماد شحن ${fallbackProviderLabel} بالسعر الثابت.`,
-        currency: 'SAR'
-      });
-    }
-
     const estimatedShippingCost = estimateShippingPriceWithConfig(distanceKm, estimatorConfig);
     const shouldUseCarrierFixedPrice = estimatedShippingCost > Number(estimatorConfig.carrierThreshold || 0);
     const shippingCost = shouldUseCarrierFixedPrice
