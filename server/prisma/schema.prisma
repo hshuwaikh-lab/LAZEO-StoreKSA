@@ -36,6 +36,13 @@ model Order {
   receiptUrl     String?
   receiptText    String?
   bankId         Int?
+  shippingProvider String?
+  receiverName   String?
+  receiverPhone  String?
+  receiverCity   String?
+  receiverDistrict String?
+  receiverStreet String?
+  receiverNearbyLandmark String?
   invoicePrinted Boolean  @default(false)
   invoiceNumber  String?
   createdAt      DateTime @default(now())
@@ -119,5 +126,14 @@ model StoreSettings {
   whatsappToken  String?
   snapchatUrl    String?
   instagramUrl   String?
+  storeLat       Float?
+  storeLng       Float?
+  shippingBasePrice Float?
+  shippingPricePerKm Float?
+  shippingMinPrice Float?
+  shippingMaxPrice Float?
+  shippingCarrierThreshold Float?
+  shippingCarrierFixedPrice Float?
+  shippingCarrierProvider String?
   updatedAt      DateTime @updatedAt
 }

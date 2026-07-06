@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
@@ -9,6 +9,14 @@ import ActionBanner from '../components/ActionBanner';
 import { getOfferLabel } from '../utils/offers';
 import { normalizeCouponCode } from '../utils/coupons';
 import './Cart.css';
+
+const PICKUP_SHIPPING_METHOD = {
+  id: 'pickup',
+  type: 'pickup',
+  name: 'استلام من المتجر',
+  price: 0,
+  estimatedDays: 'نفس اليوم'
+};
 
 const Cart = () => {
   const { t, i18n } = useTranslation();
@@ -31,33 +39,105 @@ const Cart = () => {
   const { user } = useContext(AuthContext);
   const isAr = i18n.language === 'ar';
 
-  const [shippingOptions, setShippingOptions] = useState([]);
-  const [loadingShipping, setLoadingShipping] = useState(true);
+  const [shippingMode, setShippingMode] = useState(shippingMethod?.type || 'pickup');
+  const [nationalAddress, setNationalAddress] = useState(shippingMethod?.nationalAddress || user?.address || '');
+  const [city, setCity] = useState(shippingMethod?.city || '');
+  const [postalCode, setPostalCode] = useState(shippingMethod?.postalCode || '');
+  const [estimatingShipping, setEstimatingShipping] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [couponInput, setCouponInput] = useState(appliedCoupon?.code || '');
   const [couponLoading, setCouponLoading] = useState(false);
 
-  const fetchShippingOptions = useCallback(async () => {
-    try {
-      const res = await fetch(buildApiUrl(API_ENDPOINTS.SHIPPING));
-      if (res.ok) {
-        const data = await res.json();
-        setShippingOptions(data);
-        // Automatically select first option if none selected
-        if (data.length > 0 && !shippingMethod) {
-          setShippingMethod(data[0]);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch shipping options', error);
-    } finally {
-      setLoadingShipping(false);
+  useEffect(() => {
+    if (!shippingMethod) {
+      setShippingMethod(PICKUP_SHIPPING_METHOD);
+      return;
+    }
+
+    if (shippingMethod.type === 'pickup') {
+      setShippingMode('pickup');
+      return;
+    }
+
+    setShippingMode('delivery');
+    if (shippingMethod.nationalAddress) {
+      setNationalAddress(shippingMethod.nationalAddress);
+    }
+    if (shippingMethod.city) {
+      setCity(shippingMethod.city);
+    }
+    if (shippingMethod.postalCode) {
+      setPostalCode(shippingMethod.postalCode);
     }
   }, [setShippingMethod, shippingMethod]);
 
-  useEffect(() => {
-    fetchShippingOptions();
-  }, [fetchShippingOptions]);
+  const handleShippingModeChange = (mode) => {
+    setShippingMode(mode);
+
+    if (mode === 'pickup') {
+      setShippingMethod(PICKUP_SHIPPING_METHOD);
+      return;
+    }
+
+    setShippingMethod(null);
+  };
+
+  const handleEstimateShipping = async () => {
+    if (!nationalAddress.trim()) {
+      setFeedback({ type: 'error', title: 'العنوان الوطني مطلوب', message: 'أدخل العنوان الوطني لحساب قيمة الشحن.' });
+      return;
+    }
+
+    setEstimatingShipping(true);
+    try {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.SHIPPING_ESTIMATE), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nationalAddress: nationalAddress.trim(),
+          city: city.trim(),
+          postalCode: postalCode.trim()
+        })
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setShippingMethod(null);
+        setFeedback({ type: 'error', title: 'تعذر حساب الشحن', message: result.error || 'تحقق من بيانات العنوان الوطني.' });
+        return;
+      }
+
+      const estimatedMethod = {
+        id: 'delivery-estimate',
+        type: 'delivery',
+        name: result.isCarrierFixedPrice ? `شحن عبر ${result.shippingProviderLabel || 'شركة الشحن'}` : 'شحن للعنوان الوطني',
+        price: Number(result.shippingCost || 0),
+        estimatedDays: result.estimatedDays || '2-4 أيام',
+        distanceKm: Number(result.distanceKm || 0),
+        nationalAddress: nationalAddress.trim(),
+        city: city.trim(),
+        postalCode: postalCode.trim(),
+        shippingProvider: result.shippingProvider || 'national-address',
+        shippingProviderLabel: result.shippingProviderLabel || '',
+        isCarrierFixedPrice: Boolean(result.isCarrierFixedPrice),
+        estimatedShippingCost: Number(result.estimatedShippingCost || result.shippingCost || 0),
+        isEstimated: true
+      };
+
+      setShippingMethod(estimatedMethod);
+      setFeedback({
+        type: 'success',
+        title: 'تم تقدير الشحن',
+        message: estimatedMethod.isCarrierFixedPrice
+          ? `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم. تم التحويل تلقائيًا إلى ${estimatedMethod.shippingProviderLabel} بسعر ثابت ${estimatedMethod.price.toFixed(2)} ر.س.`
+          : `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم، وقيمة الشحن ${estimatedMethod.price.toFixed(2)} ر.س.`
+      });
+    } catch {
+      setFeedback({ type: 'error', title: 'خطأ في الاتصال', message: 'تعذر حساب الشحن حالياً. أعد المحاولة.' });
+    } finally {
+      setEstimatingShipping(false);
+    }
+  };
 
   useEffect(() => {
     if (!appliedCoupon) {
@@ -138,6 +218,16 @@ const Cart = () => {
       navigate('/login', { state: { from: '/cart' } });
       return;
     }
+
+    if (shippingMode === 'delivery' && (!shippingMethod || shippingMethod.type !== 'delivery' || !shippingMethod.isEstimated)) {
+      setFeedback({
+        type: 'error',
+        title: 'حساب الشحن مطلوب',
+        message: 'الرجاء إدخال العنوان الوطني وحساب قيمة الشحن قبل إتمام الطلب.'
+      });
+      return;
+    }
+
     navigate('/checkout');
   };
 
@@ -237,27 +327,67 @@ const Cart = () => {
           
           <div style={{ marginBottom: '20px', textAlign: isAr ? 'right' : 'left' }}>
             <h3 style={{ fontSize: '1.1rem', marginBottom: '10px' }}>{t('shipping_method') || 'طريقة الشحن / الاستلام'}</h3>
-            {loadingShipping ? (
-              <p style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>{t('loading') || 'جاري التحميل...'}</p>
-            ) : shippingOptions.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {shippingOptions.map(option => (
-                  <label key={option.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.95rem' }}>
-                    <input 
-                      type="radio" 
-                      name="shipping" 
-                      value={option.id} 
-                      checked={shippingMethod?.id === option.id}
-                      onChange={() => setShippingMethod(option)}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.95rem' }}>
+                <input
+                  type="radio"
+                  name="shippingMode"
+                  value="pickup"
+                  checked={shippingMode === 'pickup'}
+                  onChange={() => handleShippingModeChange('pickup')}
+                />
+                <span>استلام من المتجر (مجانًا)</span>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.95rem' }}>
+                <input
+                  type="radio"
+                  name="shippingMode"
+                  value="delivery"
+                  checked={shippingMode === 'delivery'}
+                  onChange={() => handleShippingModeChange('delivery')}
+                />
+                <span>شحن (حسب العنوان الوطني)</span>
+              </label>
+
+              {shippingMode === 'delivery' && (
+                <div style={{ marginTop: '8px', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '12px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <textarea
+                    value={nationalAddress}
+                    onChange={(e) => setNationalAddress(e.target.value)}
+                    placeholder="اكتب العنوان الوطني بالكامل"
+                    rows={3}
+                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                  />
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <input
+                      type="text"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="المدينة (اختياري)"
+                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', flex: 1, minWidth: '150px' }}
                     />
-                    {option.logoUrl && <img src={option.logoUrl} alt={option.name} style={{ width: '25px', height: '25px', objectFit: 'contain', marginLeft: '5px' }} />}
-                    <span>{option.name} ({option.price > 0 ? `${option.price} ${t('currency') || 'ر.س'}` : t('free') || 'مجانًا'})</span>
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <p style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>{t('no_shipping_methods') || 'لا توجد طرق شحن متاحة'}</p>
-            )}
+                    <input
+                      type="text"
+                      value={postalCode}
+                      onChange={(e) => setPostalCode(e.target.value)}
+                      placeholder="الرمز البريدي (اختياري)"
+                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', flex: 1, minWidth: '150px' }}
+                    />
+                  </div>
+                  <button type="button" className="btn-secondary" onClick={handleEstimateShipping} disabled={estimatingShipping}>
+                    {estimatingShipping ? 'جاري الحساب...' : 'حساب قيمة الشحن'}
+                  </button>
+
+                  {shippingMethod?.type === 'delivery' && shippingMethod.isEstimated && (
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>
+                      <div>المسافة التقديرية: {shippingMethod.distanceKm?.toFixed(2)} كم</div>
+                      <div>مدة التوصيل المتوقعة: {shippingMethod.estimatedDays}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <div style={{ marginBottom: '20px', textAlign: isAr ? 'right' : 'left' }}>

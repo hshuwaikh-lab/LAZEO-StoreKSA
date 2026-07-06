@@ -143,6 +143,208 @@ function isImageUpload(contentType) {
   return String(contentType || '').toLowerCase().startsWith('image/');
 }
 
+const DEFAULT_STORE_COORDINATES = {
+  lat: Number(process.env.STORE_LAT || 24.7136),
+  lng: Number(process.env.STORE_LNG || 46.6753)
+};
+
+const CITY_COORDINATES = {
+  riyadh: { lat: 24.7136, lng: 46.6753 },
+  jeddah: { lat: 21.5433, lng: 39.1728 },
+  mecca: { lat: 21.3891, lng: 39.8579 },
+  medina: { lat: 24.5247, lng: 39.5692 },
+  dammam: { lat: 26.4207, lng: 50.0888 },
+  khobar: { lat: 26.2794, lng: 50.2083 },
+  dhahran: { lat: 26.2886, lng: 50.1139 },
+  taif: { lat: 21.2703, lng: 40.4158 },
+  tabuk: { lat: 28.3838, lng: 36.5662 },
+  abha: { lat: 18.2164, lng: 42.5053 },
+  hail: { lat: 27.5114, lng: 41.7208 },
+  qassim: { lat: 26.326, lng: 43.975 },
+  buraidah: { lat: 26.3592, lng: 43.9818 },
+  unaizah: { lat: 26.0843, lng: 43.993 },
+  najran: { lat: 17.565, lng: 44.2289 },
+  jazan: { lat: 16.8892, lng: 42.5511 },
+  albahah: { lat: 20.0129, lng: 41.4677 },
+  jouf: { lat: 29.9697, lng: 40.2064 },
+  sakaka: { lat: 29.9697, lng: 40.2064 },
+  arar: { lat: 30.9753, lng: 41.0381 },
+  yanbu: { lat: 24.0895, lng: 38.0618 },
+  jubail: { lat: 27.0046, lng: 49.646 },
+  alkharj: { lat: 24.1556, lng: 47.3346 },
+  alkhobar: { lat: 26.2794, lng: 50.2083 },
+  ahsa: { lat: 25.383, lng: 49.586 },
+  hofuf: { lat: 25.3646, lng: 49.5876 },
+  qatif: { lat: 26.565, lng: 49.9982 }
+};
+
+const CITY_ALIASES = {
+  'الرياض': 'riyadh',
+  'جدة': 'jeddah',
+  'جده': 'jeddah',
+  'مكة': 'mecca',
+  'مكه': 'mecca',
+  'المدينة': 'medina',
+  'المدينة المنورة': 'medina',
+  'الدمام': 'dammam',
+  'الخبر': 'khobar',
+  'الظهران': 'dhahran',
+  'الطائف': 'taif',
+  'تبوك': 'tabuk',
+  'أبها': 'abha',
+  'ابها': 'abha',
+  'حائل': 'hail',
+  'القصيم': 'qassim',
+  'بريدة': 'buraidah',
+  'عنيزة': 'unaizah',
+  'نجران': 'najran',
+  'جازان': 'jazan',
+  'الباحة': 'albahah',
+  'الجوف': 'jouf',
+  'سكاكا': 'sakaka',
+  'عرعر': 'arar',
+  'ينبع': 'yanbu',
+  'الجبيل': 'jubail',
+  'الخرج': 'alkharj',
+  'الأحساء': 'ahsa',
+  'الاحساء': 'ahsa',
+  'الهفوف': 'hofuf',
+  'القطيف': 'qatif'
+};
+
+const POSTAL_PREFIX_CITY = {
+  '11': 'riyadh',
+  '12': 'riyadh',
+  '13': 'riyadh',
+  '21': 'jeddah',
+  '22': 'mecca',
+  '23': 'mecca',
+  '24': 'taif',
+  '31': 'dammam',
+  '32': 'khobar',
+  '33': 'dhahran',
+  '34': 'jubail',
+  '41': 'medina',
+  '42': 'abha',
+  '43': 'jazan',
+  '44': 'albahah',
+  '45': 'najran',
+  '46': 'tabuk',
+  '47': 'jouf',
+  '51': 'qassim',
+  '52': 'hail',
+  '53': 'arar',
+  '56': 'yanbu'
+};
+
+function normalizeAddressText(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function resolveCityKey({ city, nationalAddress, postalCode }) {
+  const normalizedCity = normalizeAddressText(city);
+  if (CITY_COORDINATES[normalizedCity]) {
+    return normalizedCity;
+  }
+
+  const aliasKey = Object.keys(CITY_ALIASES).find((label) => normalizeAddressText(label) === normalizedCity);
+  if (aliasKey) {
+    return CITY_ALIASES[aliasKey];
+  }
+
+  const normalizedAddress = normalizeAddressText(nationalAddress);
+  const matchedAlias = Object.entries(CITY_ALIASES).find(([label]) => normalizedAddress.includes(normalizeAddressText(label)));
+  if (matchedAlias) {
+    return matchedAlias[1];
+  }
+
+  const normalizedPostal = String(postalCode || '').trim();
+  const prefix = normalizedPostal.slice(0, 2);
+  if (POSTAL_PREFIX_CITY[prefix]) {
+    return POSTAL_PREFIX_CITY[prefix];
+  }
+
+  return null;
+}
+
+function haversineDistanceKm(origin, destination) {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const deltaLat = toRad(destination.lat - origin.lat);
+  const deltaLng = toRad(destination.lng - origin.lng);
+  const a = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(toRad(origin.lat))
+    * Math.cos(toRad(destination.lat))
+    * Math.sin(deltaLng / 2) ** 2;
+
+  return 2 * earthRadiusKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function toOptionalNumber(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const normalized = Number(value);
+  return Number.isFinite(normalized) ? normalized : null;
+}
+
+function buildShippingEstimatorConfig(settings) {
+  const storeLat = toOptionalNumber(settings?.storeLat);
+  const storeLng = toOptionalNumber(settings?.storeLng);
+  const shippingBasePrice = toOptionalNumber(settings?.shippingBasePrice);
+  const shippingPricePerKm = toOptionalNumber(settings?.shippingPricePerKm);
+  const shippingMinPrice = toOptionalNumber(settings?.shippingMinPrice);
+  const shippingMaxPrice = toOptionalNumber(settings?.shippingMaxPrice);
+  const shippingCarrierThreshold = toOptionalNumber(settings?.shippingCarrierThreshold);
+  const shippingCarrierFixedPrice = toOptionalNumber(settings?.shippingCarrierFixedPrice);
+
+  const normalizedCarrierProvider = String(settings?.shippingCarrierProvider || process.env.SHIPPING_CARRIER_PROVIDER || 'aramex')
+    .trim()
+    .toLowerCase();
+  const shippingCarrierProvider = normalizedCarrierProvider === 'smsa' ? 'smsa' : 'aramex';
+
+  return {
+    storeCoordinates: {
+      lat: storeLat ?? DEFAULT_STORE_COORDINATES.lat,
+      lng: storeLng ?? DEFAULT_STORE_COORDINATES.lng
+    },
+    basePrice: shippingBasePrice ?? Number(process.env.SHIPPING_BASE_PRICE || 12),
+    pricePerKm: shippingPricePerKm ?? Number(process.env.SHIPPING_PRICE_PER_KM || 0.65),
+    minPrice: shippingMinPrice ?? Number(process.env.SHIPPING_MIN_PRICE || 18),
+    maxPrice: shippingMaxPrice ?? Number(process.env.SHIPPING_MAX_PRICE || 180),
+    carrierThreshold: shippingCarrierThreshold ?? Number(process.env.SHIPPING_CARRIER_THRESHOLD || 35),
+    carrierFixedPrice: shippingCarrierFixedPrice ?? Number(process.env.SHIPPING_CARRIER_FIXED_PRICE || 35),
+    carrierProvider: shippingCarrierProvider
+  };
+}
+
+function estimateShippingPriceWithConfig(distanceKm, config) {
+  const basePrice = Number(config?.basePrice || 12);
+  const pricePerKm = Number(config?.pricePerKm || 0.65);
+  const minPrice = Number(config?.minPrice || 18);
+  const maxPrice = Number(config?.maxPrice || 180);
+
+  const rawValue = basePrice + (distanceKm * pricePerKm);
+  const bounded = Math.max(minPrice, Math.min(maxPrice, rawValue));
+  return Number(bounded.toFixed(2));
+}
+
+function estimateDeliveryWindow(distanceKm) {
+  if (distanceKm <= 80) return '1-2 أيام';
+  if (distanceKm <= 250) return '2-3 أيام';
+  if (distanceKm <= 600) return '3-5 أيام';
+  return '5-7 أيام';
+}
+
+function getCarrierProviderLabel(provider) {
+  return provider === 'smsa' ? 'سمسا' : 'أرامكس';
+}
+
 function normalizeProductImageUrls(imageValue) {
   if (Array.isArray(imageValue)) {
     return imageValue.flatMap(normalizeProductImageUrls).filter(Boolean);
@@ -988,6 +1190,54 @@ app.get('/api/shipping', async (req, res) => {
   }
 });
 
+app.post('/api/shipping/estimate', async (req, res) => {
+  const { nationalAddress, city, postalCode } = req.body || {};
+
+  if (!nationalAddress || String(nationalAddress).trim().length < 6) {
+    return res.status(400).json({ error: 'الرجاء إدخال العنوان الوطني بشكل صحيح' });
+  }
+
+  try {
+    const settings = await prisma.storeSettings.findFirst();
+    const estimatorConfig = buildShippingEstimatorConfig(settings);
+    const cityKey = resolveCityKey({ city, nationalAddress, postalCode });
+    const destination = cityKey ? CITY_COORDINATES[cityKey] : null;
+
+    if (!destination) {
+      return res.status(400).json({
+        error: 'تعذر تحديد المدينة من العنوان الوطني. أضف اسم المدينة أو الرمز البريدي الصحيح.'
+      });
+    }
+
+    const distanceKm = Number(haversineDistanceKm(estimatorConfig.storeCoordinates, destination).toFixed(2));
+    const estimatedShippingCost = estimateShippingPriceWithConfig(distanceKm, estimatorConfig);
+    const shouldUseCarrierFixedPrice = estimatedShippingCost > Number(estimatorConfig.carrierThreshold || 0);
+    const shippingCost = shouldUseCarrierFixedPrice
+      ? Number(Number(estimatorConfig.carrierFixedPrice || 35).toFixed(2))
+      : estimatedShippingCost;
+    const shippingProvider = shouldUseCarrierFixedPrice ? estimatorConfig.carrierProvider : 'national-address';
+    const shippingProviderLabel = shouldUseCarrierFixedPrice ? getCarrierProviderLabel(shippingProvider) : 'شحن وطني';
+    const estimatedDays = estimateDeliveryWindow(distanceKm);
+
+    return res.json({
+      shippingType: 'delivery',
+      cityKey,
+      distanceKm,
+      shippingCost,
+      estimatedShippingCost,
+      isCarrierFixedPrice: shouldUseCarrierFixedPrice,
+      shippingProvider,
+      shippingProviderLabel,
+      carrierThreshold: Number(estimatorConfig.carrierThreshold || 0),
+      carrierFixedPrice: Number(estimatorConfig.carrierFixedPrice || 35),
+      estimatedDays,
+      currency: 'SAR'
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 app.get('/api/banks', async (req, res) => {
   try {
     const banks = await prisma.bankAccount.findMany();
@@ -1026,7 +1276,22 @@ app.post('/api/coupons/validate', async (req, res) => {
 });
 
 app.post('/api/orders', authenticateToken, async (req, res) => {
-  const { items, totalAmount, bankId, receiptUrl, receiptText, couponCode, discountAmount } = req.body;
+  const {
+    items,
+    totalAmount,
+    bankId,
+    receiptUrl,
+    receiptText,
+    couponCode,
+    discountAmount,
+    shippingProvider,
+    receiverName,
+    receiverPhone,
+    receiverCity,
+    receiverDistrict,
+    receiverStreet,
+    receiverNearbyLandmark
+  } = req.body;
   try {
     const normalizedItems = Array.isArray(items) ? items : [];
     const subtotalBeforeShipping = normalizedItems
@@ -1056,6 +1321,22 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'لا يمكن إرسال خصم بدون كوبون صالح' });
     }
 
+    const normalizedShippingProvider = String(shippingProvider || '').trim().toLowerCase();
+    const requiresCarrierReceiverDetails = normalizedShippingProvider === 'aramex' || normalizedShippingProvider === 'smsa';
+
+    const normalizedReceiverName = String(receiverName || '').trim();
+    const normalizedReceiverPhone = String(receiverPhone || '').trim();
+    const normalizedReceiverCity = String(receiverCity || '').trim();
+    const normalizedReceiverDistrict = String(receiverDistrict || '').trim();
+    const normalizedReceiverStreet = String(receiverStreet || '').trim();
+    const normalizedReceiverNearbyLandmark = String(receiverNearbyLandmark || '').trim();
+
+    if (requiresCarrierReceiverDetails) {
+      if (!normalizedReceiverName || !normalizedReceiverPhone || !normalizedReceiverCity || !normalizedReceiverDistrict || !normalizedReceiverStreet || !normalizedReceiverNearbyLandmark) {
+        return res.status(400).json({ error: 'بيانات المستلم كاملة مطلوبة عند الشحن عبر أرامكس أو سمسا' });
+      }
+    }
+
     const newOrder = await prisma.order.create({
       data: {
         userId: req.user.id,
@@ -1066,6 +1347,13 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
         bankId: parseInt(bankId),
         receiptUrl,
         receiptText,
+        shippingProvider: normalizedShippingProvider || null,
+        receiverName: normalizedReceiverName || null,
+        receiverPhone: normalizedReceiverPhone || null,
+        receiverCity: normalizedReceiverCity || null,
+        receiverDistrict: normalizedReceiverDistrict || null,
+        receiverStreet: normalizedReceiverStreet || null,
+        receiverNearbyLandmark: normalizedReceiverNearbyLandmark || null,
         status: 'pending' // pending review
       }
     });
@@ -1377,17 +1665,51 @@ app.get('/api/settings', async (req, res) => {
 });
 
 app.put('/api/admin/settings', authenticateToken, requireAdmin, async (req, res) => {
-  const { whatsappNumber, whatsappToken, snapchatUrl, instagramUrl } = req.body;
+  const {
+    whatsappNumber,
+    whatsappToken,
+    snapchatUrl,
+    instagramUrl,
+    storeLat,
+    storeLng,
+    shippingBasePrice,
+    shippingPricePerKm,
+    shippingMinPrice,
+    shippingMaxPrice,
+    shippingCarrierThreshold,
+    shippingCarrierFixedPrice,
+    shippingCarrierProvider
+  } = req.body;
+
+  const normalizedCarrierProvider = String(shippingCarrierProvider || '').trim().toLowerCase();
+  const resolvedCarrierProvider = normalizedCarrierProvider === 'smsa' ? 'smsa' : 'aramex';
+
+  const settingsPayload = {
+    whatsappNumber,
+    whatsappToken,
+    snapchatUrl,
+    instagramUrl,
+    storeLat: toOptionalNumber(storeLat),
+    storeLng: toOptionalNumber(storeLng),
+    shippingBasePrice: toOptionalNumber(shippingBasePrice),
+    shippingPricePerKm: toOptionalNumber(shippingPricePerKm),
+    shippingMinPrice: toOptionalNumber(shippingMinPrice),
+    shippingMaxPrice: toOptionalNumber(shippingMaxPrice),
+    shippingCarrierThreshold: toOptionalNumber(shippingCarrierThreshold),
+    shippingCarrierFixedPrice: toOptionalNumber(shippingCarrierFixedPrice),
+    shippingCarrierProvider: resolvedCarrierProvider
+  };
+
   try {
     let settings = await prisma.storeSettings.findFirst();
     if (settings) {
       settings = await prisma.storeSettings.update({
         where: { id: settings.id },
-        data: { whatsappNumber, whatsappToken, snapchatUrl, instagramUrl }
+        data: settingsPayload
       });
     } else {
       settings = await prisma.storeSettings.create({
-        data: { whatsappNumber, whatsappToken, snapchatUrl, instagramUrl }
+        data: settingsPayload
       });
     }
     res.json(settings);

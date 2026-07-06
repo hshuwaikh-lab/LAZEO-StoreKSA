@@ -35,6 +35,18 @@ const Checkout = () => {
   const [receiptText, setReceiptText] = useState('');
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState(null);
+  const [receiverDetails, setReceiverDetails] = useState({
+    receiverName: '',
+    receiverPhone: '',
+    receiverCity: '',
+    receiverDistrict: '',
+    receiverStreet: '',
+    receiverNearbyLandmark: ''
+  });
+
+  const normalizedShippingProvider = String(shippingMethod?.shippingProvider || '').toLowerCase();
+  const requiresCarrierReceiverDetails = !isCustomOrderPayment && shippingMethod?.type === 'delivery' && (normalizedShippingProvider === 'aramex' || normalizedShippingProvider === 'smsa');
+  const shippingProviderLabel = normalizedShippingProvider === 'smsa' ? 'سمسا' : 'أرامكس';
 
   useEffect(() => {
     if (!isCustomOrderPayment && cartItems.length === 0) {
@@ -70,6 +82,13 @@ const Checkout = () => {
     if (!selectedBank) {
       setFeedback({ type: 'error', title: 'اختيار البنك مطلوب', message: 'الرجاء اختيار بنك للتحويل أولًا.' });
       return;
+    }
+
+    if (requiresCarrierReceiverDetails) {
+      if (!receiverDetails.receiverName.trim() || !receiverDetails.receiverPhone.trim() || !receiverDetails.receiverCity.trim() || !receiverDetails.receiverDistrict.trim() || !receiverDetails.receiverStreet.trim() || !receiverDetails.receiverNearbyLandmark.trim()) {
+        setFeedback({ type: 'error', title: 'بيانات المستلم مطلوبة', message: 'أكمل اسم المستلم والجوال والمدينة والحي والشارع والمعلم القريب قبل إرسال الطلب.' });
+        return;
+      }
     }
     
     let finalReceiptUrl = null;
@@ -111,8 +130,8 @@ const Checkout = () => {
         : ((shippingMethod 
         ? [...cartItems.map((item) => decorateProductPricing(item, { quantity: item.quantity })), { 
             id: 'shipping', 
-            nameEn: `Shipping: ${shippingMethod.name}`, 
-            nameAr: `الشحن: ${shippingMethod.name}`, 
+          nameEn: shippingMethod?.type === 'pickup' ? 'Pickup from store' : `Shipping: ${shippingMethod.name}`,
+          nameAr: shippingMethod?.type === 'pickup' ? 'استلام من المتجر' : `الشحن: ${shippingMethod.name}`,
             price: shippingCost, 
             quantity: 1,
             isShipping: true,
@@ -134,6 +153,13 @@ const Checkout = () => {
           bankId: selectedBank.id,
           receiptUrl: finalReceiptUrl,
           receiptText: finalReceiptText,
+          shippingProvider: shippingMethod?.shippingProvider || null,
+          receiverName: receiverDetails.receiverName.trim() || null,
+          receiverPhone: receiverDetails.receiverPhone.trim() || null,
+          receiverCity: receiverDetails.receiverCity.trim() || null,
+          receiverDistrict: receiverDetails.receiverDistrict.trim() || null,
+          receiverStreet: receiverDetails.receiverStreet.trim() || null,
+          receiverNearbyLandmark: receiverDetails.receiverNearbyLandmark.trim() || null,
           customOrderId: isCustomOrderPayment ? customOrder.id : null
         })
       });
@@ -201,7 +227,18 @@ const Checkout = () => {
           {!isCustomOrderPayment && couponDiscount > 0 && (
             <p>بعد الخصم: {discountedSubtotal.toFixed(2)} ر.س</p>
           )}
-          {!isCustomOrderPayment && <p>الشحن ({shippingMethod?.name || 'غير محدد'}): {shippingCost > 0 ? `${shippingCost.toFixed(2)} ر.س` : 'مجانًا'}</p>}
+          {!isCustomOrderPayment && (
+            <p>
+              {shippingMethod?.type === 'pickup' ? 'طريقة التنفيذ (استلام):' : `الشحن (${shippingMethod?.name || 'غير محدد'}):`}{' '}
+              {shippingCost > 0 ? `${shippingCost.toFixed(2)} ر.س` : 'مجانًا'}
+              {shippingMethod?.type === 'delivery' && shippingMethod?.distanceKm ? ` - ${shippingMethod.distanceKm.toFixed(2)} كم` : ''}
+            </p>
+          )}
+          {requiresCarrierReceiverDetails && (
+            <p style={{ color: '#92400e', fontWeight: 700 }}>
+              نوع الشحن: {shippingProviderLabel} - مطلوب إدخال بيانات المستلم للتسليم.
+            </p>
+          )}
           <h3 style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-color)' }}>الإجمالي النهائي: {orderSummaryAmount.toFixed(2)} ر.س</h3>
         </div>
 
@@ -265,6 +302,54 @@ const Checkout = () => {
 
         {selectedBank && (
           <form onSubmit={handleSubmitOrder} style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '30px' }}>
+
+            {requiresCarrierReceiverDetails && (
+              <div style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <strong>بيانات المستلم للشحن عبر {shippingProviderLabel}</strong>
+                <input
+                  type="text"
+                  placeholder="الاسم المستلم"
+                  value={receiverDetails.receiverName}
+                  onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverName: e.target.value }))}
+                  style={{ padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)' }}
+                />
+                <input
+                  type="text"
+                  placeholder="الجوال"
+                  value={receiverDetails.receiverPhone}
+                  onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverPhone: e.target.value }))}
+                  style={{ padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)' }}
+                />
+                <input
+                  type="text"
+                  placeholder="المدينة"
+                  value={receiverDetails.receiverCity}
+                  onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverCity: e.target.value }))}
+                  style={{ padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)' }}
+                />
+                <input
+                  type="text"
+                  placeholder="الحي"
+                  value={receiverDetails.receiverDistrict}
+                  onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverDistrict: e.target.value }))}
+                  style={{ padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)' }}
+                />
+                <input
+                  type="text"
+                  placeholder="الشارع"
+                  value={receiverDetails.receiverStreet}
+                  onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverStreet: e.target.value }))}
+                  style={{ padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)' }}
+                />
+                <input
+                  type="text"
+                  placeholder="معلم قريب"
+                  value={receiverDetails.receiverNearbyLandmark}
+                  onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverNearbyLandmark: e.target.value }))}
+                  style={{ padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)' }}
+                />
+              </div>
+            )}
             
             <div style={{ display: 'flex', gap: '15px' }}>
               <label>

@@ -11,6 +11,7 @@ import Cart from './pages/Cart';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminDesktopProgram from './pages/AdminDesktopProgram';
+import AdminShippingSettings from './pages/AdminShippingSettings';
 import DesktopUnlock from './pages/DesktopUnlock';
 import Profile from './pages/Profile';
 import Checkout from './pages/Checkout';
@@ -68,6 +69,11 @@ function App() {
               <Route path="/admin/desktop-program" element={
                 <ProtectedRoute requireAdmin={true}>
                   <AdminDesktopProgram />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin/shipping-settings" element={
+                <ProtectedRoute requireAdmin={true}>
+                  <AdminShippingSettings />
                 </ProtectedRoute>
               } />
             </Routes>

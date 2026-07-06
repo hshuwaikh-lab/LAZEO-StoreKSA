@@ -303,7 +303,12 @@ const AdminDashboard = () => {
   };
 
   // --- Settings Management ---
-  const [settingsForm, setSettingsForm] = useState({ whatsappNumber: '', whatsappToken: '', snapchatUrl: '', instagramUrl: '' });
+  const [settingsForm, setSettingsForm] = useState({
+    whatsappNumber: '',
+    whatsappToken: '',
+    snapchatUrl: '',
+    instagramUrl: ''
+  });
   const [storageHealth, setStorageHealth] = useState(null);
   const [checkingStorageHealth, setCheckingStorageHealth] = useState(false);
   const [storageLastCheckedAt, setStorageLastCheckedAt] = useState(null);
@@ -666,7 +671,7 @@ const AdminDashboard = () => {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (error) {
+    } catch {
       setFeedback({ type: 'error', title: 'فشل التصدير', message: 'حدث خطأ أثناء تصدير ملف Excel للمنتجات.' });
     }
   };
@@ -1452,6 +1457,9 @@ const AdminDashboard = () => {
             />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button onClick={() => navigate('/admin/shipping-settings')} className="btn-secondary" style={{ padding: '0.5rem 1rem' }}>
+              إعدادات الشحن التقديري
+            </button>
             <button onClick={() => navigate('/admin/desktop-program')} className="btn-secondary" style={{ padding: '0.5rem 1rem' }}>
               برنامج الكمبيوتر
             </button>
@@ -1593,6 +1601,17 @@ const AdminDashboard = () => {
                 <input type="text" placeholder="توكن الواتساب (API Token)" value={settingsForm.whatsappToken} onChange={e => setSettingsForm({...settingsForm, whatsappToken: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
                 <input type="text" placeholder="رابط السناب شات" value={settingsForm.snapchatUrl} onChange={e => setSettingsForm({...settingsForm, snapchatUrl: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
                 <input type="text" placeholder="رابط الانستغرام" value={settingsForm.instagramUrl} onChange={e => setSettingsForm({...settingsForm, instagramUrl: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
+
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <h4 style={{ margin: 0 }}>صفحة تعديل الشحن التقديري</h4>
+                  <span style={{ color: '#475569', fontSize: '0.9rem' }}>تم نقل إعدادات الشحن التقديري إلى صفحة مستقلة لتسهيل الإدارة.</span>
+                  <div>
+                    <button type="button" className="btn-secondary" onClick={() => navigate('/admin/shipping-settings')}>
+                      فتح صفحة إعدادات الشحن التقديري
+                    </button>
+                  </div>
+                </div>
+
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                   <button type="submit" className="btn-primary" style={{ padding: '8px 16px', width: 'fit-content' }}>حفظ الإعدادات</button>
                   <button type="button" className="btn-secondary" onClick={handleCheckStorageHealth} disabled={checkingStorageHealth} style={{ padding: '8px 16px' }}>
@@ -1821,7 +1840,29 @@ const AdminDashboard = () => {
                             <td>
                               {o.receiptUrl && <a href={o.receiptUrl} target="_blank" rel="noreferrer" style={{marginRight: '5px'}}>صورة</a>}
                               {o.receiptText && <button className="btn-secondary" style={{padding: '2px 5px', fontSize: '0.8rem', marginRight: '5px'}} onClick={() => { setDialog({ open: true, title: `نص الإيصال #${o.id}`, content: o.receiptText, mode: 'text' }); setDialogText(o.receiptText); }}>نص</button>}
-                              {!o.receiptUrl && !o.receiptText && '-'}
+                              {(o.shippingProvider === 'aramex' || o.shippingProvider === 'smsa') && o.receiverName && (
+                                <button
+                                  className="btn-secondary"
+                                  style={{padding: '2px 5px', fontSize: '0.8rem', marginRight: '5px'}}
+                                  onClick={() => {
+                                    const providerLabel = o.shippingProvider === 'smsa' ? 'سمسا' : 'أرامكس';
+                                    const details = [
+                                      `شركة الشحن: ${providerLabel}`,
+                                      `الاسم المستلم: ${o.receiverName || '-'}`,
+                                      `الجوال: ${o.receiverPhone || '-'}`,
+                                      `المدينة: ${o.receiverCity || '-'}`,
+                                      `الحي: ${o.receiverDistrict || '-'}`,
+                                      `الشارع: ${o.receiverStreet || '-'}`,
+                                      `معلم قريب: ${o.receiverNearbyLandmark || '-'}`
+                                    ].join('\n');
+                                    setDialog({ open: true, title: `بيانات المستلم #${o.id}`, content: details, mode: 'text' });
+                                    setDialogText(details);
+                                  }}
+                                >
+                                  بيانات المستلم
+                                </button>
+                              )}
+                              {!o.receiptUrl && !o.receiptText && !(o.shippingProvider === 'aramex' || o.shippingProvider === 'smsa') && '-'}
                             </td>
                             <td>{new Date(o.createdAt).toLocaleDateString()}</td>
                             <td>

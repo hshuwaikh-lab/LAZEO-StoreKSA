@@ -64,6 +64,7 @@ export const API_ENDPOINTS = {
   
   // Shipping
   SHIPPING: '/api/shipping',
+  SHIPPING_ESTIMATE: '/api/shipping/estimate',
   
   // Admin
   ADMIN_USERS: '/api/admin/users',

@@ -3,6 +3,9 @@ import React, { forwardRef } from 'react';
 const InvoiceTemplate = forwardRef(({ order }, ref) => {
   if (!order) return null;
   const logoUrl = `${import.meta.env.BASE_URL}logo.png`;
+  const normalizedShippingProvider = String(order.shippingProvider || '').toLowerCase();
+  const isCarrierShipment = normalizedShippingProvider === 'aramex' || normalizedShippingProvider === 'smsa';
+  const shippingProviderLabel = normalizedShippingProvider === 'smsa' ? 'سمسا' : 'أرامكس';
 
   let items = [];
   try {
@@ -58,6 +61,30 @@ const InvoiceTemplate = forwardRef(({ order }, ref) => {
             </tbody>
           </table>
         </div>
+
+        {isCarrierShipment && (
+          <div style={{ marginBottom: '30px', padding: '15px', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
+            <h3 style={{ margin: '0 0 10px 0', fontSize: '18px', color: '#000', borderBottom: '1px solid #cbd5e1', paddingBottom: '5px' }}>
+              بيانات المستلم ({shippingProviderLabel})
+            </h3>
+            <table style={{ width: '100%', border: 'none' }}>
+              <tbody>
+                <tr>
+                  <td style={{ padding: '5px', width: '50%' }}><strong>الاسم المستلم:</strong> {order.receiverName || '-'}</td>
+                  <td style={{ padding: '5px', width: '50%' }}><strong>الجوال:</strong> <span dir="ltr">{order.receiverPhone || '-'}</span></td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '5px' }}><strong>المدينة:</strong> {order.receiverCity || '-'}</td>
+                  <td style={{ padding: '5px' }}><strong>الحي:</strong> {order.receiverDistrict || '-'}</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '5px' }}><strong>الشارع:</strong> {order.receiverStreet || '-'}</td>
+                  <td style={{ padding: '5px' }}><strong>معلم قريب:</strong> {order.receiverNearbyLandmark || '-'}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Products Table */}
         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>

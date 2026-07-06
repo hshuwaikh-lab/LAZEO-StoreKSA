@@ -12,10 +12,16 @@ const CustomOrder = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const resolveInitialDetails = () => {
+    const searchParams = new URLSearchParams(location.search);
+    const project = searchParams.get('project');
+    return project ? `أرغب في تنفيذ مشروع مشابه لـ ${project}.` : '';
+  };
+
   const [materials, setMaterials] = useState([]);
   const [formData, setFormData] = useState({
     material: '',
-    details: ''
+    details: resolveInitialDetails()
   });
 
   useEffect(() => {
@@ -36,23 +42,6 @@ const CustomOrder = () => {
     fetchMaterials();
   }, []);
 
-  useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const project = searchParams.get('project');
-
-    if (project) {
-      setFormData(prev => {
-        if (prev.details.trim()) {
-          return prev;
-        }
-
-        return {
-          ...prev,
-          details: `أرغب في تنفيذ مشروع مشابه لـ ${project}.`,
-        };
-      });
-    }
-  }, [location.search]);
   const [inputType, setInputType] = useState('image');
   const [file, setFile] = useState(null);
   const [attachmentText, setAttachmentText] = useState('');
