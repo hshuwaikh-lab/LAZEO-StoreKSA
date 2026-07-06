@@ -1200,14 +1200,13 @@ app.post('/api/shipping/estimate', async (req, res) => {
   try {
     const settings = await prisma.storeSettings.findFirst();
     const estimatorConfig = buildShippingEstimatorConfig(settings);
+    const fallbackCarrierPrice = Math.round(Number(estimatorConfig.carrierFixedPrice || 35));
+    const fallbackProvider = estimatorConfig.carrierProvider;
+    const fallbackProviderLabel = getCarrierProviderLabel(fallbackProvider);
     const cityKey = resolveCityKey({ city, nationalAddress, postalCode });
     const destination = cityKey ? CITY_COORDINATES[cityKey] : null;
 
     if (!destination) {
-      const fallbackCarrierPrice = Math.round(Number(estimatorConfig.carrierFixedPrice || 35));
-      const fallbackProvider = estimatorConfig.carrierProvider;
-      const fallbackProviderLabel = getCarrierProviderLabel(fallbackProvider);
-
       return res.json({
         shippingType: 'delivery',
         cityKey: null,
@@ -1221,12 +1220,31 @@ app.post('/api/shipping/estimate', async (req, res) => {
         carrierFixedPrice: fallbackCarrierPrice,
         estimatedDays: '3-5 أيام',
         estimationMode: 'fallback-no-city',
-        warning: `تعذر تحديد المدينة من العنوان الوطني، تم اعتماد شحن ${fallbackProviderLabel} بالسعر الثابت.`,
+        warning: `تعذر تحديد المسافة من العنوان الوطني، تم اعتماد شحن ${fallbackProviderLabel} بالسعر الثابت.`,
         currency: 'SAR'
       });
     }
 
     const distanceKm = Number(haversineDistanceKm(estimatorConfig.storeCoordinates, destination).toFixed(2));
+    if (!Number.isFinite(distanceKm) || distanceKm <= 0) {
+      return res.json({
+        shippingType: 'delivery',
+        cityKey,
+        distanceKm: null,
+        shippingCost: fallbackCarrierPrice,
+        estimatedShippingCost: fallbackCarrierPrice,
+        isCarrierFixedPrice: true,
+        shippingProvider: fallbackProvider,
+        shippingProviderLabel: fallbackProviderLabel,
+        carrierThreshold: Number(estimatorConfig.carrierThreshold || 0),
+        carrierFixedPrice: fallbackCarrierPrice,
+        estimatedDays: '3-5 أيام',
+        estimationMode: 'fallback-no-distance',
+        warning: `تعذر تحديد المسافة بدقة، تم اعتماد شحن ${fallbackProviderLabel} بالسعر الثابت.`,
+        currency: 'SAR'
+      });
+    }
+
     const estimatedShippingCost = estimateShippingPriceWithConfig(distanceKm, estimatorConfig);
     const shouldUseCarrierFixedPrice = estimatedShippingCost > Number(estimatorConfig.carrierThreshold || 0);
     const shippingCost = shouldUseCarrierFixedPrice
