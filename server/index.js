@@ -237,12 +237,22 @@ const POSTAL_PREFIX_CITY = {
   '56': 'yanbu'
 };
 
+const NATIONAL_SHORTCODE_CITY = {
+  emga: 'riyadh'
+};
+
 function normalizeAddressText(value) {
   return String(value || '')
     .trim()
     .toLowerCase()
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '');
+}
+
+function normalizeArabicDigits(value) {
+  return String(value || '')
+    .replace(/[\u0660-\u0669]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[\u06f0-\u06f9]/g, (digit) => String(digit.charCodeAt(0) - 0x06f0));
 }
 
 function resolveCityKey({ city, nationalAddress, postalCode }) {
@@ -262,7 +272,24 @@ function resolveCityKey({ city, nationalAddress, postalCode }) {
     return matchedAlias[1];
   }
 
-  const normalizedPostal = String(postalCode || '').trim();
+  const compactAddress = normalizeAddressText(nationalAddress).replace(/[^a-z0-9\u0600-\u06ff]/g, '');
+  const shortCodeMatch = compactAddress.match(/^([a-z]{4})(\d{4})$/i);
+  if (shortCodeMatch) {
+    const shortCodePrefix = shortCodeMatch[1].toLowerCase();
+    if (NATIONAL_SHORTCODE_CITY[shortCodePrefix]) {
+      return NATIONAL_SHORTCODE_CITY[shortCodePrefix];
+    }
+  }
+
+  let normalizedPostal = normalizeArabicDigits(String(postalCode || '')).replace(/\D/g, '');
+  if (normalizedPostal.length < 2) {
+    const normalizedAddressWithDigits = normalizeArabicDigits(nationalAddress);
+    const postalMatch = normalizedAddressWithDigits.match(/\b(\d{5})\b/);
+    if (postalMatch) {
+      normalizedPostal = postalMatch[1];
+    }
+  }
+
   const prefix = normalizedPostal.slice(0, 2);
   if (POSTAL_PREFIX_CITY[prefix]) {
     return POSTAL_PREFIX_CITY[prefix];
