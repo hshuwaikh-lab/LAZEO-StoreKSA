@@ -126,6 +126,7 @@ model StoreSettings {
   whatsappToken  String?
   snapchatUrl    String?
   instagramUrl   String?
+  storeNationalAddress String?
   storeLat       Float?
   storeLng       Float?
   shippingBasePrice Float?

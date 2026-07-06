@@ -4,6 +4,7 @@ import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import ActionBanner from '../components/ActionBanner';
 
 const emptyForm = {
+  storeNationalAddress: '',
   storeLat: '',
   storeLng: '',
   shippingBasePrice: '',
@@ -32,6 +33,7 @@ const AdminShippingSettings = () => {
 
       const settings = await response.json();
       setForm({
+        storeNationalAddress: settings.storeNationalAddress ?? '',
         storeLat: settings.storeLat ?? '',
         storeLng: settings.storeLng ?? '',
         shippingBasePrice: settings.shippingBasePrice ?? '',
@@ -92,6 +94,7 @@ const AdminShippingSettings = () => {
         message: 'تم تحديث صفحة إعدادات الشحن التقديري بنجاح.'
       });
       setForm({
+        storeNationalAddress: result.storeNationalAddress ?? '',
         storeLat: result.storeLat ?? '',
         storeLng: result.storeLng ?? '',
         shippingBasePrice: result.shippingBasePrice ?? '',
@@ -137,6 +140,14 @@ const AdminShippingSettings = () => {
             <p style={{ margin: 0, color: 'var(--text-light)' }}>
               تتحكم هذه القيم في حساب المسافة والتسعير عند اختيار الشحن بالعنوان الوطني.
             </p>
+
+            <textarea
+              placeholder="العنوان الوطني للمتجر"
+              value={form.storeNationalAddress}
+              onChange={(e) => setForm((prev) => ({ ...prev, storeNationalAddress: e.target.value }))}
+              rows={3}
+              style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', resize: 'vertical' }}
+            />
 
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <input
