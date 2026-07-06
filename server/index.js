@@ -180,36 +180,74 @@ const CITY_COORDINATES = {
 
 const CITY_ALIASES = {
   'الرياض': 'riyadh',
+  'منطقة الرياض': 'riyadh',
+  'riyadh': 'riyadh',
   'جدة': 'jeddah',
   'جده': 'jeddah',
+  'jeddah': 'jeddah',
   'مكة': 'mecca',
   'مكه': 'mecca',
+  'مكة المكرمة': 'mecca',
+  'mecca': 'mecca',
+  'makkah': 'mecca',
   'المدينة': 'medina',
   'المدينة المنورة': 'medina',
+  'المدينة المنوره': 'medina',
+  'medina': 'medina',
+  'madinah': 'medina',
   'الدمام': 'dammam',
+  'dammam': 'dammam',
   'الخبر': 'khobar',
+  'الخبر الشرقية': 'khobar',
+  'khobar': 'khobar',
+  'al khobar': 'khobar',
   'الظهران': 'dhahran',
+  'dhahran': 'dhahran',
   'الطائف': 'taif',
+  'taif': 'taif',
   'تبوك': 'tabuk',
+  'tabuk': 'tabuk',
   'أبها': 'abha',
   'ابها': 'abha',
+  'abha': 'abha',
   'حائل': 'hail',
+  'hail': 'hail',
   'القصيم': 'qassim',
+  'qassim': 'qassim',
   'بريدة': 'buraidah',
+  'buraidah': 'buraidah',
   'عنيزة': 'unaizah',
+  'unaizah': 'unaizah',
   'نجران': 'najran',
+  'najran': 'najran',
   'جازان': 'jazan',
+  'jazan': 'jazan',
+  'jizan': 'jazan',
   'الباحة': 'albahah',
+  'al bahah': 'albahah',
+  'albahah': 'albahah',
   'الجوف': 'jouf',
+  'jouf': 'jouf',
+  'al jouf': 'jouf',
   'سكاكا': 'sakaka',
+  'sakaka': 'sakaka',
   'عرعر': 'arar',
+  'arar': 'arar',
   'ينبع': 'yanbu',
+  'yanbu': 'yanbu',
   'الجبيل': 'jubail',
+  'jubail': 'jubail',
   'الخرج': 'alkharj',
+  'alkharj': 'alkharj',
+  'al kharj': 'alkharj',
   'الأحساء': 'ahsa',
   'الاحساء': 'ahsa',
+  'ahsa': 'ahsa',
+  'al ahsa': 'ahsa',
   'الهفوف': 'hofuf',
-  'القطيف': 'qatif'
+  'hofuf': 'hofuf',
+  'القطيف': 'qatif',
+  'qatif': 'qatif'
 };
 
 const POSTAL_PREFIX_CITY = {
@@ -245,10 +283,23 @@ function normalizeAddressText(value) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+function compactAddressText(value) {
+  return normalizeAddressText(value).replace(/[\s\-_/.,]+/g, '');
+}
+
 function resolveCityKey({ city, nationalAddress, postalCode }) {
   const normalizedCity = normalizeAddressText(city);
   if (CITY_COORDINATES[normalizedCity]) {
     return normalizedCity;
+  }
+
+  const compactCity = compactAddressText(city);
+  if (compactCity) {
+    const compactCoordinateKey = Object.keys(CITY_COORDINATES)
+      .find((key) => compactAddressText(key) === compactCity);
+    if (compactCoordinateKey) {
+      return compactCoordinateKey;
+    }
   }
 
   const aliasKey = Object.keys(CITY_ALIASES).find((label) => normalizeAddressText(label) === normalizedCity);
@@ -256,10 +307,31 @@ function resolveCityKey({ city, nationalAddress, postalCode }) {
     return CITY_ALIASES[aliasKey];
   }
 
+  if (compactCity) {
+    const compactAliasKey = Object.keys(CITY_ALIASES)
+      .find((label) => compactAddressText(label) === compactCity);
+    if (compactAliasKey) {
+      return CITY_ALIASES[compactAliasKey];
+    }
+  }
+
   const normalizedAddress = normalizeAddressText(nationalAddress);
+  const compactNationalAddress = compactAddressText(nationalAddress);
   const matchedAlias = Object.entries(CITY_ALIASES).find(([label]) => normalizedAddress.includes(normalizeAddressText(label)));
   if (matchedAlias) {
     return matchedAlias[1];
+  }
+
+  const matchedCompactAlias = Object.entries(CITY_ALIASES)
+    .find(([label]) => compactNationalAddress.includes(compactAddressText(label)));
+  if (matchedCompactAlias) {
+    return matchedCompactAlias[1];
+  }
+
+  const matchedCityKey = Object.keys(CITY_COORDINATES)
+    .find((key) => normalizedAddress.includes(key) || compactNationalAddress.includes(compactAddressText(key)));
+  if (matchedCityKey) {
+    return matchedCityKey;
   }
 
   const normalizedPostal = String(postalCode || '').trim();
@@ -1226,7 +1298,7 @@ app.post('/api/shipping/estimate', async (req, res) => {
     }
 
     const distanceKm = Number(haversineDistanceKm(estimatorConfig.storeCoordinates, destination).toFixed(2));
-    if (!Number.isFinite(distanceKm) || distanceKm <= 0) {
+    if (!Number.isFinite(distanceKm) || distanceKm < 0) {
       return res.json({
         shippingType: 'delivery',
         cityKey,
