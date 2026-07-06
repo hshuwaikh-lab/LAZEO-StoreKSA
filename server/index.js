@@ -193,9 +193,12 @@ const CITY_ALIASES = {
   'المدينة': 'medina',
   'المدينة المنورة': 'medina',
   'المدينة المنوره': 'medina',
+  'منطقة المدينة المنورة': 'medina',
   'medina': 'medina',
   'madinah': 'medina',
   'الدمام': 'dammam',
+  'المنطقة الشرقية': 'dammam',
+  'الشرقية': 'dammam',
   'dammam': 'dammam',
   'الخبر': 'khobar',
   'الخبر الشرقية': 'khobar',
@@ -283,6 +286,12 @@ function normalizeAddressText(value) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+function normalizeArabicDigits(value) {
+  return String(value || '')
+    .replace(/[\u0660-\u0669]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[\u06f0-\u06f9]/g, (digit) => String(digit.charCodeAt(0) - 0x06f0));
+}
+
 function compactAddressText(value) {
   return normalizeAddressText(value).replace(/[\s\-_/.,]+/g, '');
 }
@@ -334,7 +343,15 @@ function resolveCityKey({ city, nationalAddress, postalCode }) {
     return matchedCityKey;
   }
 
-  const normalizedPostal = String(postalCode || '').trim();
+  let normalizedPostal = normalizeArabicDigits(String(postalCode || '')).replace(/\D/g, '');
+  if (normalizedPostal.length < 2) {
+    const normalizedAddressWithDigits = normalizeArabicDigits(nationalAddress);
+    const postalMatch = normalizedAddressWithDigits.match(/\b(\d{5})\b/);
+    if (postalMatch) {
+      normalizedPostal = postalMatch[1];
+    }
+  }
+
   const prefix = normalizedPostal.slice(0, 2);
   if (POSTAL_PREFIX_CITY[prefix]) {
     return POSTAL_PREFIX_CITY[prefix];
