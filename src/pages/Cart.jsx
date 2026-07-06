@@ -130,8 +130,8 @@ const Cart = () => {
 
       setShippingMethod(estimatedMethod);
       setFeedback({
-        type: 'success',
-        title: 'تم تقدير الشحن',
+        type: estimatedMethod.estimationMode === 'fallback-no-city' ? 'info' : 'success',
+        title: estimatedMethod.estimationMode === 'fallback-no-city' ? 'تم اعتماد الشحن الثابت' : 'تم تقدير الشحن',
         message: estimatedMethod.estimationMode === 'fallback-no-city'
           ? (result.warning || `تم اعتماد ${estimatedMethod.shippingProviderLabel} بالسعر الثابت ${Math.round(estimatedMethod.price)} ر.س.`)
           : (estimatedMethod.isCarrierFixedPrice
