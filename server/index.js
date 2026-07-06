@@ -1204,8 +1204,25 @@ app.post('/api/shipping/estimate', async (req, res) => {
     const destination = cityKey ? CITY_COORDINATES[cityKey] : null;
 
     if (!destination) {
-      return res.status(400).json({
-        error: 'تعذر تحديد المدينة من العنوان الوطني. أضف اسم المدينة أو الرمز البريدي الصحيح.'
+      const fallbackCarrierPrice = Math.round(Number(estimatorConfig.carrierFixedPrice || 35));
+      const fallbackProvider = estimatorConfig.carrierProvider;
+      const fallbackProviderLabel = getCarrierProviderLabel(fallbackProvider);
+
+      return res.json({
+        shippingType: 'delivery',
+        cityKey: null,
+        distanceKm: null,
+        shippingCost: fallbackCarrierPrice,
+        estimatedShippingCost: fallbackCarrierPrice,
+        isCarrierFixedPrice: true,
+        shippingProvider: fallbackProvider,
+        shippingProviderLabel: fallbackProviderLabel,
+        carrierThreshold: Number(estimatorConfig.carrierThreshold || 0),
+        carrierFixedPrice: fallbackCarrierPrice,
+        estimatedDays: '3-5 أيام',
+        estimationMode: 'fallback-no-city',
+        warning: `تعذر تحديد المدينة من العنوان الوطني، تم اعتماد شحن ${fallbackProviderLabel} بالسعر الثابت.`,
+        currency: 'SAR'
       });
     }
 

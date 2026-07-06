@@ -116,7 +116,7 @@ const Cart = () => {
         name: result.isCarrierFixedPrice ? `شحن عبر ${result.shippingProviderLabel || 'شركة الشحن'}` : 'شحن للعنوان الوطني',
         price: Number(result.shippingCost || 0),
         estimatedDays: result.estimatedDays || '2-4 أيام',
-        distanceKm: Number(result.distanceKm || 0),
+        distanceKm: result.distanceKm == null ? null : Number(result.distanceKm),
         nationalAddress: nationalAddress.trim(),
         city: city.trim(),
         postalCode: postalCode.trim(),
@@ -124,6 +124,7 @@ const Cart = () => {
         shippingProviderLabel: result.shippingProviderLabel || '',
         isCarrierFixedPrice: Boolean(result.isCarrierFixedPrice),
         estimatedShippingCost: Number(result.estimatedShippingCost || result.shippingCost || 0),
+        estimationMode: result.estimationMode || 'normal',
         isEstimated: true
       };
 
@@ -131,9 +132,11 @@ const Cart = () => {
       setFeedback({
         type: 'success',
         title: 'تم تقدير الشحن',
-        message: estimatedMethod.isCarrierFixedPrice
-          ? `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم. تم التحويل تلقائيًا إلى ${estimatedMethod.shippingProviderLabel} بسعر ثابت ${Math.round(estimatedMethod.price)} ر.س.`
-          : `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم، وقيمة الشحن ${Math.round(estimatedMethod.price)} ر.س.`
+        message: estimatedMethod.estimationMode === 'fallback-no-city'
+          ? (result.warning || `تم اعتماد ${estimatedMethod.shippingProviderLabel} بالسعر الثابت ${Math.round(estimatedMethod.price)} ر.س.`)
+          : (estimatedMethod.isCarrierFixedPrice
+            ? `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم. تم التحويل تلقائيًا إلى ${estimatedMethod.shippingProviderLabel} بسعر ثابت ${Math.round(estimatedMethod.price)} ر.س.`
+            : `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم، وقيمة الشحن ${Math.round(estimatedMethod.price)} ر.س.`)
       });
     } catch {
       setFeedback({ type: 'error', title: 'خطأ في الاتصال', message: 'تعذر حساب الشحن حالياً. أعد المحاولة.' });
@@ -384,7 +387,9 @@ const Cart = () => {
 
                   {shippingMethod?.type === 'delivery' && shippingMethod.isEstimated && (
                     <div style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>
-                      <div>المسافة التقديرية: {shippingMethod.distanceKm?.toFixed(2)} كم</div>
+                      {typeof shippingMethod.distanceKm === 'number' && shippingMethod.distanceKm > 0 && (
+                        <div>المسافة التقديرية: {shippingMethod.distanceKm.toFixed(2)} كم</div>
+                      )}
                       <div>مدة التوصيل المتوقعة: {shippingMethod.estimatedDays}</div>
                     </div>
                   )}
