@@ -50,7 +50,9 @@ const Cart = () => {
 
   useEffect(() => {
     if (!shippingMethod) {
-      setShippingMethod(PICKUP_SHIPPING_METHOD);
+      if (shippingMode === 'pickup') {
+        setShippingMethod(PICKUP_SHIPPING_METHOD);
+      }
       return;
     }
 
@@ -69,7 +71,7 @@ const Cart = () => {
     if (shippingMethod.postalCode) {
       setPostalCode(shippingMethod.postalCode);
     }
-  }, [setShippingMethod, shippingMethod]);
+  }, [setShippingMethod, shippingMethod, shippingMode]);
 
   const handleShippingModeChange = (mode) => {
     setShippingMode(mode);
@@ -326,7 +328,7 @@ const Cart = () => {
           <h2>{t('order_summary') || 'Order Summary'}</h2>
           
           <div style={{ marginBottom: '20px', textAlign: isAr ? 'right' : 'left' }}>
-            <h3 style={{ fontSize: '1.1rem', marginBottom: '10px' }}>{t('shipping_method') || 'طريقة الشحن / الاستلام'}</h3>
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '10px' }}>{t('shipping')}</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.95rem' }}>
                 <input
