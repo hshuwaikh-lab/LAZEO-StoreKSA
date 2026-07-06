@@ -331,7 +331,7 @@ function estimateShippingPriceWithConfig(distanceKm, config) {
 
   const rawValue = basePrice + (distanceKm * pricePerKm);
   const bounded = Math.max(minPrice, Math.min(maxPrice, rawValue));
-  return Number(bounded.toFixed(2));
+  return Math.round(bounded);
 }
 
 function estimateDeliveryWindow(distanceKm) {
@@ -1213,7 +1213,7 @@ app.post('/api/shipping/estimate', async (req, res) => {
     const estimatedShippingCost = estimateShippingPriceWithConfig(distanceKm, estimatorConfig);
     const shouldUseCarrierFixedPrice = estimatedShippingCost > Number(estimatorConfig.carrierThreshold || 0);
     const shippingCost = shouldUseCarrierFixedPrice
-      ? Number(Number(estimatorConfig.carrierFixedPrice || 35).toFixed(2))
+      ? Math.round(Number(estimatorConfig.carrierFixedPrice || 35))
       : estimatedShippingCost;
     const shippingProvider = shouldUseCarrierFixedPrice ? estimatorConfig.carrierProvider : 'national-address';
     const shippingProviderLabel = shouldUseCarrierFixedPrice ? getCarrierProviderLabel(shippingProvider) : 'شحن وطني';
@@ -1229,7 +1229,7 @@ app.post('/api/shipping/estimate', async (req, res) => {
       shippingProvider,
       shippingProviderLabel,
       carrierThreshold: Number(estimatorConfig.carrierThreshold || 0),
-      carrierFixedPrice: Number(estimatorConfig.carrierFixedPrice || 35),
+      carrierFixedPrice: Math.round(Number(estimatorConfig.carrierFixedPrice || 35)),
       estimatedDays,
       currency: 'SAR'
     });

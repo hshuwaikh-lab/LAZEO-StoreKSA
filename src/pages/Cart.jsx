@@ -47,6 +47,7 @@ const Cart = () => {
   const [feedback, setFeedback] = useState(null);
   const [couponInput, setCouponInput] = useState(appliedCoupon?.code || '');
   const [couponLoading, setCouponLoading] = useState(false);
+  const shippingCostInteger = Math.round(Number(shippingCost || 0));
 
   useEffect(() => {
     if (!shippingMethod) {
@@ -131,8 +132,8 @@ const Cart = () => {
         type: 'success',
         title: 'تم تقدير الشحن',
         message: estimatedMethod.isCarrierFixedPrice
-          ? `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم. تم التحويل تلقائيًا إلى ${estimatedMethod.shippingProviderLabel} بسعر ثابت ${estimatedMethod.price.toFixed(2)} ر.س.`
-          : `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم، وقيمة الشحن ${estimatedMethod.price.toFixed(2)} ر.س.`
+          ? `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم. تم التحويل تلقائيًا إلى ${estimatedMethod.shippingProviderLabel} بسعر ثابت ${Math.round(estimatedMethod.price)} ر.س.`
+          : `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم، وقيمة الشحن ${Math.round(estimatedMethod.price)} ر.س.`
       });
     } catch {
       setFeedback({ type: 'error', title: 'خطأ في الاتصال', message: 'تعذر حساب الشحن حالياً. أعد المحاولة.' });
@@ -436,7 +437,7 @@ const Cart = () => {
           )}
           <div className="summary-row">
             <span>{t('shipping') || 'Shipping'}</span>
-            <span>{shippingCost > 0 ? `${shippingCost.toFixed(2)} ${t('currency') || 'SAR'}` : t('free') || 'Free'}</span>
+            <span>{shippingCostInteger > 0 ? `${shippingCostInteger} ${t('currency') || 'SAR'}` : t('free') || 'Free'}</span>
           </div>
           <div className="summary-total">
             <span>{t('total') || 'Total'}</span>

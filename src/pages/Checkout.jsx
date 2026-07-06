@@ -47,6 +47,7 @@ const Checkout = () => {
   const normalizedShippingProvider = String(shippingMethod?.shippingProvider || '').toLowerCase();
   const requiresCarrierReceiverDetails = !isCustomOrderPayment && shippingMethod?.type === 'delivery' && (normalizedShippingProvider === 'aramex' || normalizedShippingProvider === 'smsa');
   const shippingProviderLabel = normalizedShippingProvider === 'smsa' ? 'سمسا' : 'أرامكس';
+  const shippingCostInteger = Math.round(Number(shippingCost || 0));
 
   useEffect(() => {
     if (!isCustomOrderPayment && cartItems.length === 0) {
@@ -230,7 +231,7 @@ const Checkout = () => {
           {!isCustomOrderPayment && (
             <p>
               {shippingMethod?.type === 'pickup' ? 'طريقة التنفيذ (استلام):' : `الشحن (${shippingMethod?.name || 'غير محدد'}):`}{' '}
-              {shippingCost > 0 ? `${shippingCost.toFixed(2)} ر.س` : 'مجانًا'}
+              {shippingCostInteger > 0 ? `${shippingCostInteger} ر.س` : 'مجانًا'}
               {shippingMethod?.type === 'delivery' && shippingMethod?.distanceKm ? ` - ${shippingMethod.distanceKm.toFixed(2)} كم` : ''}
             </p>
           )}
