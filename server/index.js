@@ -238,8 +238,7 @@ const POSTAL_PREFIX_CITY = {
 };
 
 const NATIONAL_SHORTCODE_CITY = {
-  erda: 'riyadh',
-  emga: 'riyadh'
+  erda: 'riyadh'
 };
 
 function normalizeAddressText(value) {
@@ -343,10 +342,17 @@ function buildShippingEstimatorConfig(settings) {
     .toLowerCase();
   const shippingCarrierProvider = normalizedCarrierProvider === 'smsa' ? 'smsa' : 'aramex';
 
+  const inferredStoreCityKey = resolveCityKey({
+    city: '',
+    nationalAddress: settings?.storeNationalAddress,
+    postalCode: ''
+  });
+  const inferredStoreCoordinates = inferredStoreCityKey ? CITY_COORDINATES[inferredStoreCityKey] : null;
+
   return {
     storeCoordinates: {
-      lat: storeLat ?? DEFAULT_STORE_COORDINATES.lat,
-      lng: storeLng ?? DEFAULT_STORE_COORDINATES.lng
+      lat: storeLat ?? inferredStoreCoordinates?.lat ?? DEFAULT_STORE_COORDINATES.lat,
+      lng: storeLng ?? inferredStoreCoordinates?.lng ?? DEFAULT_STORE_COORDINATES.lng
     },
     basePrice: shippingBasePrice ?? Number(process.env.SHIPPING_BASE_PRICE || 12),
     pricePerKm: shippingPricePerKm ?? Number(process.env.SHIPPING_PRICE_PER_KM || 0.65),
