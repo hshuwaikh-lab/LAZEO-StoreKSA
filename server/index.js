@@ -445,6 +445,36 @@ async function geocodeSaudiAddress({ nationalAddress, city, postalCode }) {
   }
 }
 
+async function getDrivingDistanceKm(origin, destination) {
+  if (typeof fetch !== 'function') {
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 7000);
+
+  try {
+    const coords = `${origin.lng},${origin.lat};${destination.lng},${destination.lat}`;
+    const response = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${coords}?overview=false&alternatives=false&steps=false`,
+      { signal: controller.signal }
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = await response.json().catch(() => null);
+    const meters = payload?.routes?.[0]?.distance;
+    const km = Number(meters) / 1000;
+    return Number.isFinite(km) && km > 0 ? km : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function normalizeProductImageUrls(imageValue) {
   if (Array.isArray(imageValue)) {
     return imageValue.flatMap(normalizeProductImageUrls).filter(Boolean);
@@ -1586,9 +1616,13 @@ app.post('/api/shipping/estimate', async (req, res) => {
 
     const rawDistanceKm = haversineDistanceKm(storeCoordinates, destination);
     const bothEndsPrecise = destinationIsPrecise && storeIsPrecise;
-    const distanceKm = Number((!bothEndsPrecise && rawDistanceKm < 0.01
+    const routingDistanceKm = bothEndsPrecise
+      ? await getDrivingDistanceKm(storeCoordinates, destination)
+      : null;
+    const resolvedDistanceKm = routingDistanceKm ?? rawDistanceKm;
+    const distanceKm = Number((!bothEndsPrecise && resolvedDistanceKm < 0.01
       ? Number(estimatorConfig.intraCityDefaultKm || 25)
-      : rawDistanceKm).toFixed(2));
+      : resolvedDistanceKm).toFixed(2));
     const estimatedShippingCost = estimateShippingPriceWithConfig(distanceKm, estimatorConfig);
     const shouldUseCarrierFixedPrice = estimatedShippingCost > Number(estimatorConfig.carrierThreshold || 0);
     const shippingCost = shouldUseCarrierFixedPrice
@@ -1611,6 +1645,7 @@ app.post('/api/shipping/estimate', async (req, res) => {
       carrierFixedPrice: Math.round(Number(estimatorConfig.carrierFixedPrice || 35)),
       estimatedDays,
       estimationMode: bothEndsPrecise ? 'real-geocoded' : 'fallback-city-center',
+      distanceSource: routingDistanceKm ? 'driving-route' : 'haversine',
       locationSource: hasCustomerCoordinates ? (String(locationSource || 'map').trim() || 'map') : 'address',
       currency: 'SAR'
     });
