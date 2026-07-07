@@ -358,6 +358,7 @@ function buildShippingEstimatorConfig(settings) {
     pricePerKm: shippingPricePerKm ?? Number(process.env.SHIPPING_PRICE_PER_KM || 0.65),
     minPrice: shippingMinPrice ?? Number(process.env.SHIPPING_MIN_PRICE || 18),
     maxPrice: shippingMaxPrice ?? Number(process.env.SHIPPING_MAX_PRICE || 180),
+    intraCityDefaultKm: Number(process.env.SHIPPING_INTRA_CITY_DEFAULT_KM || 25),
     carrierThreshold: shippingCarrierThreshold ?? Number(process.env.SHIPPING_CARRIER_THRESHOLD || 35),
     carrierFixedPrice: shippingCarrierFixedPrice ?? Number(process.env.SHIPPING_CARRIER_FIXED_PRICE || 35),
     carrierProvider: shippingCarrierProvider
@@ -1267,7 +1268,10 @@ app.post('/api/shipping/estimate', async (req, res) => {
       });
     }
 
-    const distanceKm = Number(haversineDistanceKm(estimatorConfig.storeCoordinates, destination).toFixed(2));
+    const directDistanceKm = haversineDistanceKm(estimatorConfig.storeCoordinates, destination);
+    const distanceKm = Number((directDistanceKm < 0.01
+      ? Number(estimatorConfig.intraCityDefaultKm || 25)
+      : directDistanceKm).toFixed(2));
     const estimatedShippingCost = estimateShippingPriceWithConfig(distanceKm, estimatorConfig);
     const shouldUseCarrierFixedPrice = estimatedShippingCost > Number(estimatorConfig.carrierThreshold || 0);
     const shippingCost = shouldUseCarrierFixedPrice
