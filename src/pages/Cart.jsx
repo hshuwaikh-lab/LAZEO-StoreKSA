@@ -359,7 +359,7 @@ const Cart = () => {
               {shippingMode === 'delivery' && (
                 <div style={{ marginTop: '8px', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '12px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label htmlFor="cartNationalAddress" style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>
+                    <label htmlFor="cartNationalAddress" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
                       العنوان الوطني
                     </label>
                     <textarea
@@ -376,7 +376,7 @@ const Cart = () => {
                   </div>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: '150px' }}>
-                      <label htmlFor="cartCity" style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>
+                      <label htmlFor="cartCity" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
                         المدينة
                       </label>
                       <input
@@ -389,7 +389,7 @@ const Cart = () => {
                       />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: '150px' }}>
-                      <label htmlFor="cartPostalCode" style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>
+                      <label htmlFor="cartPostalCode" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
                         الرمز البريدي
                       </label>
                       <input

@@ -22,7 +22,7 @@ const AdminShippingSettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null);
-  const labelStyle = { fontSize: '0.92rem', color: 'var(--text-light)' };
+  const labelStyle = { fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 };
   const fieldWrapStyle = { display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: '220px' };
 
   const fetchSettings = useCallback(async () => {
