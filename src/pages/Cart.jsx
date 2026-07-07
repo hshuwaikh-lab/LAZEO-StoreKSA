@@ -358,28 +358,49 @@ const Cart = () => {
 
               {shippingMode === 'delivery' && (
                 <div style={{ marginTop: '8px', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '12px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <textarea
-                    value={nationalAddress}
-                    onChange={(e) => setNationalAddress(e.target.value)}
-                    placeholder="اكتب العنوان الوطني بالكامل"
-                    rows={3}
-                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
-                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label htmlFor="cartNationalAddress" style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>
+                      العنوان الوطني
+                    </label>
+                    <textarea
+                      id="cartNationalAddress"
+                      value={nationalAddress}
+                      onChange={(e) => setNationalAddress(e.target.value)}
+                      placeholder="اكتب العنوان الوطني بالكامل"
+                      rows={3}
+                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                    />
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-light)' }}>
+                      إدخال المدينة والرمز البريدي يساعد على تقدير أدق ويمنع التحويل للسعر الثابت.
+                    </span>
+                  </div>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <input
-                      type="text"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="المدينة (اختياري)"
-                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', flex: 1, minWidth: '150px' }}
-                    />
-                    <input
-                      type="text"
-                      value={postalCode}
-                      onChange={(e) => setPostalCode(e.target.value)}
-                      placeholder="الرمز البريدي (اختياري)"
-                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', flex: 1, minWidth: '150px' }}
-                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: '150px' }}>
+                      <label htmlFor="cartCity" style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>
+                        المدينة
+                      </label>
+                      <input
+                        id="cartCity"
+                        type="text"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        placeholder="المدينة (اختياري)"
+                        style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: '150px' }}>
+                      <label htmlFor="cartPostalCode" style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>
+                        الرمز البريدي
+                      </label>
+                      <input
+                        id="cartPostalCode"
+                        type="text"
+                        value={postalCode}
+                        onChange={(e) => setPostalCode(e.target.value)}
+                        placeholder="الرمز البريدي (اختياري)"
+                        style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                      />
+                    </div>
                   </div>
                   <button type="button" className="btn-secondary" onClick={handleEstimateShipping} disabled={estimatingShipping}>
                     {estimatingShipping ? 'جاري الحساب...' : 'حساب قيمة الشحن'}

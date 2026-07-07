@@ -22,6 +22,8 @@ const AdminShippingSettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const labelStyle = { fontSize: '0.92rem', color: 'var(--text-light)' };
+  const fieldWrapStyle = { display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: '220px' };
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
@@ -141,73 +143,101 @@ const AdminShippingSettings = () => {
               تتحكم هذه القيم في حساب المسافة والتسعير عند اختيار الشحن بالعنوان الوطني.
             </p>
 
-            <textarea
-              placeholder="العنوان الوطني للمتجر"
-              value={form.storeNationalAddress}
-              onChange={(e) => setForm((prev) => ({ ...prev, storeNationalAddress: e.target.value }))}
-              rows={3}
-              style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', resize: 'vertical' }}
-            />
-
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <input
-                type="number"
-                step="0.000001"
-                placeholder="خط عرض المتجر"
-                value={form.storeLat}
-                onChange={(e) => setForm((prev) => ({ ...prev, storeLat: e.target.value }))}
-                style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', flex: 1, minWidth: '220px' }}
-              />
-              <input
-                type="number"
-                step="0.000001"
-                placeholder="خط طول المتجر"
-                value={form.storeLng}
-                onChange={(e) => setForm((prev) => ({ ...prev, storeLng: e.target.value }))}
-                style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', flex: 1, minWidth: '220px' }}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label htmlFor="storeNationalAddress" style={labelStyle}>العنوان الوطني للمتجر</label>
+              <textarea
+                id="storeNationalAddress"
+                placeholder="العنوان الوطني للمتجر"
+                value={form.storeNationalAddress}
+                onChange={(e) => setForm((prev) => ({ ...prev, storeNationalAddress: e.target.value }))}
+                rows={3}
+                style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', resize: 'vertical' }}
               />
             </div>
 
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="سعر أساس الشحن"
-                value={form.shippingBasePrice}
-                onChange={(e) => setForm((prev) => ({ ...prev, shippingBasePrice: e.target.value }))}
-                style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', flex: 1, minWidth: '220px' }}
-              />
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="سعر كل كيلومتر"
-                value={form.shippingPricePerKm}
-                onChange={(e) => setForm((prev) => ({ ...prev, shippingPricePerKm: e.target.value }))}
-                style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', flex: 1, minWidth: '220px' }}
-              />
+              <div style={fieldWrapStyle}>
+                <label htmlFor="storeLat" style={labelStyle}>خط عرض المتجر</label>
+                <input
+                  id="storeLat"
+                  type="number"
+                  step="0.000001"
+                  placeholder="خط عرض المتجر"
+                  value={form.storeLat}
+                  onChange={(e) => setForm((prev) => ({ ...prev, storeLat: e.target.value }))}
+                  style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                />
+              </div>
+              <div style={fieldWrapStyle}>
+                <label htmlFor="storeLng" style={labelStyle}>خط طول المتجر</label>
+                <input
+                  id="storeLng"
+                  type="number"
+                  step="0.000001"
+                  placeholder="خط طول المتجر"
+                  value={form.storeLng}
+                  onChange={(e) => setForm((prev) => ({ ...prev, storeLng: e.target.value }))}
+                  style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                />
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="الحد الأدنى للشحن"
-                value={form.shippingMinPrice}
-                onChange={(e) => setForm((prev) => ({ ...prev, shippingMinPrice: e.target.value }))}
-                style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', flex: 1, minWidth: '220px' }}
-              />
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="الحد الأقصى للشحن"
-                value={form.shippingMaxPrice}
-                onChange={(e) => setForm((prev) => ({ ...prev, shippingMaxPrice: e.target.value }))}
-                style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', flex: 1, minWidth: '220px' }}
-              />
+              <div style={fieldWrapStyle}>
+                <label htmlFor="shippingBasePrice" style={labelStyle}>سعر أساس الشحن</label>
+                <input
+                  id="shippingBasePrice"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="سعر أساس الشحن"
+                  value={form.shippingBasePrice}
+                  onChange={(e) => setForm((prev) => ({ ...prev, shippingBasePrice: e.target.value }))}
+                  style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                />
+              </div>
+              <div style={fieldWrapStyle}>
+                <label htmlFor="shippingPricePerKm" style={labelStyle}>سعر كل كيلومتر</label>
+                <input
+                  id="shippingPricePerKm"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="سعر كل كيلومتر"
+                  value={form.shippingPricePerKm}
+                  onChange={(e) => setForm((prev) => ({ ...prev, shippingPricePerKm: e.target.value }))}
+                  style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={fieldWrapStyle}>
+                <label htmlFor="shippingMinPrice" style={labelStyle}>الحد الأدنى للشحن</label>
+                <input
+                  id="shippingMinPrice"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="الحد الأدنى للشحن"
+                  value={form.shippingMinPrice}
+                  onChange={(e) => setForm((prev) => ({ ...prev, shippingMinPrice: e.target.value }))}
+                  style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                />
+              </div>
+              <div style={fieldWrapStyle}>
+                <label htmlFor="shippingMaxPrice" style={labelStyle}>الحد الأقصى للشحن</label>
+                <input
+                  id="shippingMaxPrice"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="الحد الأقصى للشحن"
+                  value={form.shippingMaxPrice}
+                  onChange={(e) => setForm((prev) => ({ ...prev, shippingMaxPrice: e.target.value }))}
+                  style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                />
+              </div>
             </div>
 
             <div style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '12px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -216,33 +246,45 @@ const AdminShippingSettings = () => {
                 إذا تجاوز الشحن المحسوب هذا الحد، يتم التحويل تلقائيًا إلى أرامكس أو سمسا مع سعر ثابت قابل للتعديل.
               </span>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="حد التحويل (مثال: 35)"
-                  value={form.shippingCarrierThreshold}
-                  onChange={(e) => setForm((prev) => ({ ...prev, shippingCarrierThreshold: e.target.value }))}
-                  style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', flex: 1, minWidth: '220px' }}
-                />
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="السعر الثابت بعد التحويل"
-                  value={form.shippingCarrierFixedPrice}
-                  onChange={(e) => setForm((prev) => ({ ...prev, shippingCarrierFixedPrice: e.target.value }))}
-                  style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', flex: 1, minWidth: '220px' }}
-                />
+                <div style={fieldWrapStyle}>
+                  <label htmlFor="shippingCarrierThreshold" style={labelStyle}>حد التحويل (مثال: 35)</label>
+                  <input
+                    id="shippingCarrierThreshold"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="حد التحويل (مثال: 35)"
+                    value={form.shippingCarrierThreshold}
+                    onChange={(e) => setForm((prev) => ({ ...prev, shippingCarrierThreshold: e.target.value }))}
+                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                  />
+                </div>
+                <div style={fieldWrapStyle}>
+                  <label htmlFor="shippingCarrierFixedPrice" style={labelStyle}>السعر الثابت بعد التحويل</label>
+                  <input
+                    id="shippingCarrierFixedPrice"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="السعر الثابت بعد التحويل"
+                    value={form.shippingCarrierFixedPrice}
+                    onChange={(e) => setForm((prev) => ({ ...prev, shippingCarrierFixedPrice: e.target.value }))}
+                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                  />
+                </div>
               </div>
-              <select
-                value={form.shippingCarrierProvider}
-                onChange={(e) => setForm((prev) => ({ ...prev, shippingCarrierProvider: e.target.value }))}
-                style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', maxWidth: '280px' }}
-              >
-                <option value="aramex">أرامكس</option>
-                <option value="smsa">سمسا</option>
-              </select>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxWidth: '280px' }}>
+                <label htmlFor="shippingCarrierProvider" style={labelStyle}>شركة الشحن بعد التحويل</label>
+                <select
+                  id="shippingCarrierProvider"
+                  value={form.shippingCarrierProvider}
+                  onChange={(e) => setForm((prev) => ({ ...prev, shippingCarrierProvider: e.target.value }))}
+                  style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                >
+                  <option value="aramex">أرامكس</option>
+                  <option value="smsa">سمسا</option>
+                </select>
+              </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
