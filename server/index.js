@@ -1303,18 +1303,42 @@ app.post('/api/shipping/estimate', async (req, res) => {
     const cityKey = resolveCityKey({ city, nationalAddress, postalCode });
 
     const destinationFromGeocode = await geocodeSaudiAddress({ nationalAddress, city, postalCode });
-    if (!destinationFromGeocode) {
-      return res.status(400).json({
-        error: 'تعذر تحديد موقع العميل بدقة من العنوان الوطني. الرجاء إدخال العنوان الوطني الكامل مع المدينة والرمز البريدي.'
+    const destination = destinationFromGeocode
+      ? { lat: destinationFromGeocode.lat, lng: destinationFromGeocode.lng }
+      : (cityKey && CITY_COORDINATES[cityKey] ? CITY_COORDINATES[cityKey] : null);
+    const destinationIsGeocoded = Boolean(destinationFromGeocode);
+
+    if (!destination) {
+      const fallbackCarrierPrice = Math.round(Number(estimatorConfig.carrierFixedPrice || 35));
+      const fallbackProvider = estimatorConfig.carrierProvider;
+      const fallbackProviderLabel = getCarrierProviderLabel(fallbackProvider);
+
+      return res.json({
+        shippingType: 'delivery',
+        cityKey: null,
+        distanceKm: null,
+        shippingCost: fallbackCarrierPrice,
+        estimatedShippingCost: fallbackCarrierPrice,
+        isCarrierFixedPrice: true,
+        shippingProvider: fallbackProvider,
+        shippingProviderLabel: fallbackProviderLabel,
+        carrierThreshold: Number(estimatorConfig.carrierThreshold || 0),
+        carrierFixedPrice: fallbackCarrierPrice,
+        estimatedDays: '3-5 أيام',
+        estimationMode: 'fallback-no-city',
+        warning: `تعذر تحديد موقع العميل بدقة من العنوان الوطني، تم اعتماد شحن ${fallbackProviderLabel} بالسعر الثابت.`,
+        currency: 'SAR'
       });
     }
 
     let storeCoordinates = null;
+    let storeIsPrecise = false;
     if (settings?.storeLat !== null && settings?.storeLat !== undefined && settings?.storeLng !== null && settings?.storeLng !== undefined) {
       storeCoordinates = {
         lat: Number(settings.storeLat),
         lng: Number(settings.storeLng)
       };
+      storeIsPrecise = Number.isFinite(storeCoordinates.lat) && Number.isFinite(storeCoordinates.lng);
     } else {
       const storeFromGeocode = await geocodeSaudiAddress({
         nationalAddress: settings?.storeNationalAddress,
@@ -1324,19 +1348,24 @@ app.post('/api/shipping/estimate', async (req, res) => {
 
       if (storeFromGeocode) {
         storeCoordinates = { lat: storeFromGeocode.lat, lng: storeFromGeocode.lng };
+        storeIsPrecise = true;
+      } else {
+        const storeCityKey = resolveCityKey({ city: '', nationalAddress: settings?.storeNationalAddress, postalCode: '' });
+        if (storeCityKey && CITY_COORDINATES[storeCityKey]) {
+          storeCoordinates = CITY_COORDINATES[storeCityKey];
+        }
       }
     }
 
     if (!storeCoordinates || !Number.isFinite(storeCoordinates.lat) || !Number.isFinite(storeCoordinates.lng)) {
-      return res.status(400).json({
-        error: 'تعذر تحديد موقع المتجر بدقة. الرجاء ضبط خط العرض وخط الطول في صفحة إعدادات الشحن.'
-      });
+      storeCoordinates = estimatorConfig.storeCoordinates;
     }
 
-    const distanceKm = Number(haversineDistanceKm(storeCoordinates, {
-      lat: destinationFromGeocode.lat,
-      lng: destinationFromGeocode.lng
-    }).toFixed(2));
+    const rawDistanceKm = haversineDistanceKm(storeCoordinates, destination);
+    const bothEndsPrecise = destinationIsGeocoded && storeIsPrecise;
+    const distanceKm = Number((!bothEndsPrecise && rawDistanceKm < 0.01
+      ? Number(estimatorConfig.intraCityDefaultKm || 25)
+      : rawDistanceKm).toFixed(2));
     const estimatedShippingCost = estimateShippingPriceWithConfig(distanceKm, estimatorConfig);
     const shouldUseCarrierFixedPrice = estimatedShippingCost > Number(estimatorConfig.carrierThreshold || 0);
     const shippingCost = shouldUseCarrierFixedPrice
@@ -1358,7 +1387,7 @@ app.post('/api/shipping/estimate', async (req, res) => {
       carrierThreshold: Number(estimatorConfig.carrierThreshold || 0),
       carrierFixedPrice: Math.round(Number(estimatorConfig.carrierFixedPrice || 35)),
       estimatedDays,
-      estimationMode: 'real-geocoded',
+      estimationMode: bothEndsPrecise ? 'real-geocoded' : 'fallback-city-center',
       currency: 'SAR'
     });
   } catch (error) {
