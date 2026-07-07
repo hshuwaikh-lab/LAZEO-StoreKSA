@@ -238,6 +238,7 @@ const POSTAL_PREFIX_CITY = {
 };
 
 const NATIONAL_SHORTCODE_CITY = {
+  erda: 'riyadh',
   emga: 'riyadh'
 };
 
