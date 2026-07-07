@@ -6,6 +6,7 @@ import { AuthContext } from '../context/AuthContext';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { Trash2, ShoppingCart } from 'lucide-react';
 import ActionBanner from '../components/ActionBanner';
+import LocationPickerMap from '../components/LocationPickerMap';
 import { getOfferLabel } from '../utils/offers';
 import { normalizeCouponCode } from '../utils/coupons';
 import './Cart.css';
@@ -43,6 +44,15 @@ const Cart = () => {
   const [nationalAddress, setNationalAddress] = useState(shippingMethod?.nationalAddress || user?.address || '');
   const [city, setCity] = useState(shippingMethod?.city || '');
   const [postalCode, setPostalCode] = useState(shippingMethod?.postalCode || '');
+  const [savedLocations, setSavedLocations] = useState([]);
+  const [selectedSavedLocationId, setSelectedSavedLocationId] = useState('');
+  const [customerLocation, setCustomerLocation] = useState(
+    shippingMethod?.customerLat != null && shippingMethod?.customerLng != null
+      ? { lat: Number(shippingMethod.customerLat), lng: Number(shippingMethod.customerLng) }
+      : null
+  );
+  const [locationSource, setLocationSource] = useState(shippingMethod?.locationSource || 'address');
+  const [locatingCustomer, setLocatingCustomer] = useState(false);
   const [estimatingShipping, setEstimatingShipping] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [couponInput, setCouponInput] = useState(appliedCoupon?.code || '');
@@ -72,7 +82,51 @@ const Cart = () => {
     if (shippingMethod.postalCode) {
       setPostalCode(shippingMethod.postalCode);
     }
+    if (shippingMethod.customerLat != null && shippingMethod.customerLng != null) {
+      setCustomerLocation({ lat: Number(shippingMethod.customerLat), lng: Number(shippingMethod.customerLng) });
+    }
+    if (shippingMethod.locationSource) {
+      setLocationSource(shippingMethod.locationSource);
+    }
   }, [setShippingMethod, shippingMethod, shippingMode]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!user || !token) {
+      setSavedLocations([]);
+      return;
+    }
+
+    const loadSavedLocations = async () => {
+      try {
+        const response = await fetch(buildApiUrl(API_ENDPOINTS.USER_LOCATIONS), {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const result = await response.json().catch(() => []);
+        setSavedLocations(Array.isArray(result) ? result : []);
+      } catch {
+        // Ignore saved-location loading failures in cart flow.
+      }
+    };
+
+    loadSavedLocations();
+  }, [user]);
+
+  useEffect(() => {
+    if (!savedLocations.length || nationalAddress.trim() || customerLocation) {
+      return;
+    }
+
+    const defaultLocation = savedLocations.find((location) => location.isDefault) || savedLocations[0];
+    if (defaultLocation) {
+      applySavedLocation(defaultLocation);
+    }
+  }, [savedLocations]);
 
   const handleShippingModeChange = (mode) => {
     setShippingMode(mode);
@@ -85,9 +139,61 @@ const Cart = () => {
     setShippingMethod(null);
   };
 
+  const handleCustomerLocationChange = (nextLocation, source = 'map') => {
+    setCustomerLocation(nextLocation);
+    setLocationSource(source);
+  };
+
+  const applySavedLocation = (location) => {
+    if (!location) {
+      return;
+    }
+
+    setSelectedSavedLocationId(String(location.id));
+    setNationalAddress(location.nationalAddress || '');
+    setCity(location.city || '');
+    setPostalCode(location.postalCode || '');
+
+    if (location.lat != null && location.lng != null) {
+      handleCustomerLocationChange({ lat: Number(location.lat), lng: Number(location.lng) }, 'saved-location');
+    } else {
+      setCustomerLocation(null);
+      setLocationSource('address');
+    }
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setFeedback({ type: 'error', title: 'الموقع غير متاح', message: 'المتصفح الحالي لا يدعم تحديد الموقع الجغرافي.' });
+      return;
+    }
+
+    setLocatingCustomer(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextLocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+        handleCustomerLocationChange(nextLocation, 'gps');
+        setFeedback({ type: 'success', title: 'تم تحديد الموقع', message: 'يمكنك الآن مراجعة الدبوس على الخريطة أو حساب قيمة الشحن مباشرة.' });
+        setLocatingCustomer(false);
+      },
+      () => {
+        setFeedback({ type: 'error', title: 'تعذر تحديد الموقع', message: 'امنح صلاحية الموقع أو حدد موقع العميل يدويًا من الخريطة.' });
+        setLocatingCustomer(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
+
   const handleEstimateShipping = async () => {
-    if (!nationalAddress.trim()) {
-      setFeedback({ type: 'error', title: 'العنوان الوطني مطلوب', message: 'أدخل العنوان الوطني لحساب قيمة الشحن.' });
+    if (!nationalAddress.trim() && !customerLocation) {
+      setFeedback({ type: 'error', title: 'بيانات الموقع مطلوبة', message: 'أدخل العنوان الوطني أو استخدم الخريطة لتحديد موقع العميل.' });
       return;
     }
 
@@ -99,7 +205,10 @@ const Cart = () => {
         body: JSON.stringify({
           nationalAddress: nationalAddress.trim(),
           city: city.trim(),
-          postalCode: postalCode.trim()
+          postalCode: postalCode.trim(),
+          customerLat: customerLocation?.lat ?? null,
+          customerLng: customerLocation?.lng ?? null,
+          locationSource
         })
       });
 
@@ -120,6 +229,9 @@ const Cart = () => {
         nationalAddress: nationalAddress.trim(),
         city: city.trim(),
         postalCode: postalCode.trim(),
+        customerLat: customerLocation?.lat ?? null,
+        customerLng: customerLocation?.lng ?? null,
+        locationSource,
         shippingProvider: result.shippingProvider || 'national-address',
         shippingProviderLabel: result.shippingProviderLabel || '',
         isCarrierFixedPrice: Boolean(result.isCarrierFixedPrice),
@@ -358,6 +470,33 @@ const Cart = () => {
 
               {shippingMode === 'delivery' && (
                 <div style={{ marginTop: '8px', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '12px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {savedLocations.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label htmlFor="savedLocationSelect" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
+                        اختر من المواقع المحفوظة
+                      </label>
+                      <select
+                        id="savedLocationSelect"
+                        value={selectedSavedLocationId}
+                        onChange={(e) => {
+                          const nextValue = e.target.value;
+                          setSelectedSavedLocationId(nextValue);
+                          const picked = savedLocations.find((location) => String(location.id) === nextValue);
+                          if (picked) {
+                            applySavedLocation(picked);
+                          }
+                        }}
+                        style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                      >
+                        <option value="">اختر موقعًا محفوظًا</option>
+                        {savedLocations.map((location) => (
+                          <option key={location.id} value={location.id}>
+                            {location.label}{location.isDefault ? ' - افتراضي' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <label htmlFor="cartNationalAddress" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
                       العنوان الوطني
@@ -371,7 +510,7 @@ const Cart = () => {
                       style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
                     />
                     <span style={{ fontSize: '0.82rem', color: 'var(--text-light)' }}>
-                      إدخال المدينة والرمز البريدي يساعد على تقدير أدق ويمنع التحويل للسعر الثابت.
+                      يمكنك الحساب بالعناوين، أو تحديد موقع العميل مباشرة عبر GPS والخريطة لنتيجة أدق.
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -402,12 +541,41 @@ const Cart = () => {
                       />
                     </div>
                   </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <button type="button" className="btn-secondary" onClick={handleUseCurrentLocation} disabled={locatingCustomer}>
+                      {locatingCustomer ? 'جاري تحديد الموقع...' : 'استخدم موقعي الحالي'}
+                    </button>
+                    {customerLocation ? (
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => {
+                          setCustomerLocation(null);
+                          setLocationSource('address');
+                        }}
+                      >
+                        إزالة الموقع المحدد
+                      </button>
+                    ) : null}
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-light)' }}>
+                      {customerLocation
+                        ? `الموقع الحالي: ${customerLocation.lat.toFixed(5)}, ${customerLocation.lng.toFixed(5)}`
+                        : 'يمكنك الضغط على الخريطة لإضافة دبوس وتعديل مكان العميل يدويًا.'}
+                    </span>
+                  </div>
+                  <LocationPickerMap
+                    selectedPosition={customerLocation}
+                    onPositionChange={(nextLocation) => handleCustomerLocationChange(nextLocation, 'map')}
+                  />
                   <button type="button" className="btn-secondary" onClick={handleEstimateShipping} disabled={estimatingShipping}>
                     {estimatingShipping ? 'جاري الحساب...' : 'حساب قيمة الشحن'}
                   </button>
 
                   {shippingMethod?.type === 'delivery' && shippingMethod.isEstimated && (
                     <div style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>
+                      <div>
+                        طريقة التحديد: {shippingMethod.estimationMode === 'real-geocoded' ? 'موقع دقيق عبر GPS/الخريطة' : 'تقدير عبر العنوان والمدينة'}
+                      </div>
                       {typeof shippingMethod.distanceKm === 'number' && shippingMethod.distanceKm > 0 && (
                         <div>المسافة التقديرية: {shippingMethod.distanceKm.toFixed(2)} كم</div>
                       )}

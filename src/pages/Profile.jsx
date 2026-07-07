@@ -6,14 +6,30 @@ import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import InvoiceTemplate from '../components/InvoiceTemplate';
 import ActionBanner from '../components/ActionBanner';
+import LocationPickerMap from '../components/LocationPickerMap';
 import { AuthContext } from '../context/AuthContext';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
+
+const emptyLocationForm = {
+  label: '',
+  nationalAddress: '',
+  city: '',
+  postalCode: '',
+  lat: null,
+  lng: null,
+  isDefault: false
+};
 
 const Profile = () => {
   useTranslation();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('info'); // info, orders, customOrders, password
+  const [activeTab, setActiveTab] = useState('info'); // info, locations, orders, customOrders, password
   const [profile, setProfile] = useState({ username: '', email: '', phone: '', address: '', receiveWhatsApp: true });
+  const [savedLocations, setSavedLocations] = useState([]);
+  const [locationForm, setLocationForm] = useState(emptyLocationForm);
+  const [editingLocationId, setEditingLocationId] = useState(null);
+  const [savingLocation, setSavingLocation] = useState(false);
+  const [locatingLocation, setLocatingLocation] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '' });
   const [orders, setOrders] = useState([]);
   const [customOrders, setCustomOrders] = useState([]);
@@ -42,13 +58,151 @@ const Profile = () => {
         fetch(buildApiUrl(API_ENDPOINTS.USER_CUSTOM_ORDERS), { headers })
       ]);
 
-      if (profileRes.ok) setProfile(await profileRes.json());
+      if (profileRes.ok) {
+        const profileData = await profileRes.json();
+        setProfile(profileData);
+        setSavedLocations(profileData.savedLocations || []);
+      }
       if (ordersRes.ok) setOrders(await ordersRes.json());
       if (customRes.ok) setCustomOrders(await customRes.json());
     } catch (error) {
       console.error('Error fetching profile data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resetLocationForm = () => {
+    setLocationForm(emptyLocationForm);
+    setEditingLocationId(null);
+  };
+
+  const handleLocationMapChange = (nextLocation) => {
+    setLocationForm((prev) => ({
+      ...prev,
+      lat: Number(nextLocation.lat),
+      lng: Number(nextLocation.lng)
+    }));
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setFeedback({ type: 'error', title: 'الموقع غير متاح', message: 'المتصفح الحالي لا يدعم تحديد الموقع.' });
+      return;
+    }
+
+    setLocatingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocationForm((prev) => ({
+          ...prev,
+          lat: Number(position.coords.latitude),
+          lng: Number(position.coords.longitude)
+        }));
+        setLocatingLocation(false);
+      },
+      () => {
+        setFeedback({ type: 'error', title: 'تعذر تحديد الموقع', message: 'اسمح بالوصول للموقع أو ضع الدبوس يدويًا على الخريطة.' });
+        setLocatingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
+
+  const handleEditLocation = (location) => {
+    setEditingLocationId(location.id);
+    setLocationForm({
+      label: location.label || '',
+      nationalAddress: location.nationalAddress || '',
+      city: location.city || '',
+      postalCode: location.postalCode || '',
+      lat: location.lat ?? null,
+      lng: location.lng ?? null,
+      isDefault: Boolean(location.isDefault)
+    });
+    setActiveTab('locations');
+  };
+
+  const handleDeleteLocation = async (locationId) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.USER_LOCATION_DETAIL(locationId)), {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'تعذر حذف الموقع');
+      }
+
+      const remaining = savedLocations.filter((location) => location.id !== locationId);
+      setSavedLocations(remaining);
+      setFeedback({ type: 'success', title: 'تم حذف الموقع', message: 'تم حذف الموقع المحفوظ بنجاح.' });
+      if (editingLocationId === locationId) {
+        resetLocationForm();
+      }
+    } catch (error) {
+      setFeedback({ type: 'error', title: 'تعذر الحذف', message: error.message || 'حدث خطأ أثناء حذف الموقع.' });
+    }
+  };
+
+  const handleSaveLocation = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    setSavingLocation(true);
+    try {
+      const endpoint = editingLocationId
+        ? API_ENDPOINTS.USER_LOCATION_DETAIL(editingLocationId)
+        : API_ENDPOINTS.USER_LOCATIONS;
+      const method = editingLocationId ? 'PUT' : 'POST';
+
+      const payload = {
+        label: locationForm.label,
+        nationalAddress: locationForm.nationalAddress,
+        city: locationForm.city,
+        postalCode: locationForm.postalCode,
+        lat: locationForm.lat,
+        lng: locationForm.lng,
+        isDefault: locationForm.isDefault
+      };
+
+      const res = await fetch(buildApiUrl(endpoint), {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(result.error || 'تعذر حفظ الموقع');
+      }
+
+      const nextLocations = editingLocationId
+        ? savedLocations.map((location) => (location.id === result.id ? result : location))
+        : [result, ...savedLocations];
+      const normalizedLocations = result.isDefault
+        ? nextLocations.map((location) => ({ ...location, isDefault: location.id === result.id }))
+        : nextLocations;
+
+      setSavedLocations(normalizedLocations.sort((a, b) => Number(b.isDefault) - Number(a.isDefault)));
+      setFeedback({ type: 'success', title: 'تم حفظ الموقع', message: editingLocationId ? 'تم تحديث الموقع المحفوظ.' : 'تم إضافة الموقع المحفوظ بنجاح.' });
+      resetLocationForm();
+    } catch (error) {
+      setFeedback({ type: 'error', title: 'تعذر الحفظ', message: error.message || 'حدث خطأ أثناء حفظ الموقع.' });
+    } finally {
+      setSavingLocation(false);
     }
   };
 
@@ -182,6 +336,7 @@ const Profile = () => {
       
       <div style={{ display: 'flex', gap: '20px', marginBottom: '30px', justifyContent: 'center', flexWrap: 'wrap' }}>
         <button className={activeTab === 'info' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('info')}>البيانات الشخصية</button>
+        <button className={activeTab === 'locations' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('locations')}>المواقع المحفوظة</button>
         <button className={activeTab === 'password' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('password')}>تغيير كلمة المرور</button>
         <button className={activeTab === 'orders' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('orders')}>الطلبات السابقة</button>
         <button className={activeTab === 'customOrders' ? 'btn-primary' : 'btn-secondary'} onClick={() => setActiveTab('customOrders')}>الطلبات المخصصة</button>
@@ -212,6 +367,132 @@ const Profile = () => {
             </div>
             <button type="submit" className="btn-primary">حفظ التعديلات</button>
           </form>
+        )}
+
+        {activeTab === 'locations' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(320px, 0.9fr)', gap: '20px' }}>
+            <form onSubmit={handleSaveLocation} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <h3 style={{ margin: 0 }}>{editingLocationId ? 'تعديل موقع محفوظ' : 'إضافة موقع جديد'}</h3>
+                {editingLocationId ? (
+                  <button type="button" className="btn-secondary" onClick={resetLocationForm}>إلغاء التعديل</button>
+                ) : null}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label>المسمى</label>
+                <input
+                  type="text"
+                  value={locationForm.label}
+                  onChange={(e) => setLocationForm((prev) => ({ ...prev, label: e.target.value }))}
+                  placeholder="مثال: المنزل، العمل، بيت الوالد"
+                  style={{ padding: '10px', borderRadius: '8px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label>العنوان الوطني</label>
+                <textarea
+                  value={locationForm.nationalAddress}
+                  onChange={(e) => setLocationForm((prev) => ({ ...prev, nationalAddress: e.target.value }))}
+                  rows={3}
+                  placeholder="اكتب العنوان الوطني لهذا الموقع"
+                  style={{ padding: '10px', borderRadius: '8px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, minWidth: '180px' }}>
+                  <label>المدينة</label>
+                  <input
+                    type="text"
+                    value={locationForm.city}
+                    onChange={(e) => setLocationForm((prev) => ({ ...prev, city: e.target.value }))}
+                    placeholder="المدينة"
+                    style={{ padding: '10px', borderRadius: '8px' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, minWidth: '180px' }}>
+                  <label>الرمز البريدي</label>
+                  <input
+                    type="text"
+                    value={locationForm.postalCode}
+                    onChange={(e) => setLocationForm((prev) => ({ ...prev, postalCode: e.target.value }))}
+                    placeholder="الرمز البريدي"
+                    style={{ padding: '10px', borderRadius: '8px' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button type="button" className="btn-secondary" onClick={handleUseCurrentLocation} disabled={locatingLocation}>
+                  {locatingLocation ? 'جاري تحديد الموقع...' : 'استخدم موقعي الحالي'}
+                </button>
+                {locationForm.lat != null && locationForm.lng != null ? (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setLocationForm((prev) => ({ ...prev, lat: null, lng: null }))}
+                  >
+                    إزالة الإحداثيات
+                  </button>
+                ) : null}
+                <span style={{ color: 'var(--text-light)', fontSize: '0.9rem' }}>
+                  {locationForm.lat != null && locationForm.lng != null
+                    ? `${locationForm.lat.toFixed(5)}, ${locationForm.lng.toFixed(5)}`
+                    : 'يمكنك تعيين الموقع من الخريطة أو عبر GPS.'}
+                </span>
+              </div>
+
+              <LocationPickerMap
+                selectedPosition={locationForm.lat != null && locationForm.lng != null ? { lat: locationForm.lat, lng: locationForm.lng } : null}
+                onPositionChange={handleLocationMapChange}
+              />
+
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  id="defaultLocationToggle"
+                  checked={locationForm.isDefault}
+                  onChange={(e) => setLocationForm((prev) => ({ ...prev, isDefault: e.target.checked }))}
+                />
+                <label htmlFor="defaultLocationToggle">تعيين كموقع افتراضي</label>
+              </div>
+
+              <button type="submit" className="btn-primary" disabled={savingLocation}>
+                {savingLocation ? 'جاري الحفظ...' : editingLocationId ? 'حفظ التعديل' : 'إضافة الموقع'}
+              </button>
+            </form>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <h3 style={{ margin: 0 }}>مواقعي المحفوظة</h3>
+              {savedLocations.length === 0 ? (
+                <div style={{ padding: '18px', borderRadius: '12px', background: 'rgba(15,23,42,0.03)', border: '1px solid var(--border-color)' }}>
+                  لا توجد مواقع محفوظة بعد.
+                </div>
+              ) : savedLocations.map((location) => (
+                <div key={location.id} style={{ padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', background: location.isDefault ? 'rgba(22,163,74,0.06)' : 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <strong>{location.label}</strong>
+                    {location.isDefault ? <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#166534' }}>افتراضي</span> : null}
+                  </div>
+                  {location.nationalAddress ? <div>{location.nationalAddress}</div> : null}
+                  <div style={{ color: 'var(--text-light)', fontSize: '0.9rem' }}>
+                    {[location.city, location.postalCode].filter(Boolean).join(' - ') || 'بدون مدينة أو رمز بريدي'}
+                  </div>
+                  {location.lat != null && location.lng != null ? (
+                    <div style={{ color: 'var(--text-light)', fontSize: '0.85rem' }}>
+                      {Number(location.lat).toFixed(5)}, {Number(location.lng).toFixed(5)}
+                    </div>
+                  ) : null}
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <button type="button" className="btn-secondary" onClick={() => handleEditLocation(location)}>تعديل</button>
+                    <button type="button" className="btn-secondary" onClick={() => handleDeleteLocation(location.id)}>حذف</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {activeTab === 'password' && (

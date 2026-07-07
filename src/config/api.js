@@ -35,6 +35,8 @@ export const API_ENDPOINTS = {
 
   // User
   USER_PROFILE: '/api/user/profile',
+  USER_LOCATIONS: '/api/user/locations',
+  USER_LOCATION_DETAIL: (id) => `/api/user/locations/${id}`,
   USER_ORDERS: '/api/user/orders',
   USER_CUSTOM_ORDERS: '/api/user/custom-orders',
   USER_PASSWORD: '/api/user/password',

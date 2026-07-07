@@ -23,6 +23,23 @@ model User {
   
   orders          Order[]
   customOrders    CustomOrder[]
+  savedLocations  UserSavedLocation[]
+}
+
+model UserSavedLocation {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  label           String
+  nationalAddress String?
+  city            String?
+  postalCode      String?
+  lat             Float?
+  lng             Float?
+  isDefault       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Order {

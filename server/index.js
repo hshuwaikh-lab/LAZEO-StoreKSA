@@ -938,9 +938,40 @@ app.post('/api/upload/signed-url', authenticateToken, async (req, res) => {
 });
 
 // --- User Profile Routes ---
+const savedLocationSelect = {
+  id: true,
+  label: true,
+  nationalAddress: true,
+  city: true,
+  postalCode: true,
+  lat: true,
+  lng: true,
+  isDefault: true,
+  createdAt: true,
+  updatedAt: true
+};
+
 app.get('/api/user/profile', authenticateToken, async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: { id: true, username: true, email: true, phone: true, address: true, role: true, receiveWhatsApp: true } });
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        phone: true,
+        address: true,
+        role: true,
+        receiveWhatsApp: true,
+        savedLocations: {
+          select: savedLocationSelect,
+          orderBy: [
+            { isDefault: 'desc' },
+            { updatedAt: 'desc' }
+          ]
+        }
+      }
+    });
     res.json(user);
   } catch (error) {
     console.error('User profile endpoint error:', error);
@@ -961,6 +992,191 @@ app.put('/api/user/profile', authenticateToken, async (req, res) => {
       select: { id: true, username: true, email: true, phone: true, address: true, role: true, receiveWhatsApp: true }
     });
     res.json(updatedUser);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/user/locations', authenticateToken, async (req, res) => {
+  try {
+    const locations = await prisma.userSavedLocation.findMany({
+      where: { userId: req.user.id },
+      select: savedLocationSelect,
+      orderBy: [
+        { isDefault: 'desc' },
+        { updatedAt: 'desc' }
+      ]
+    });
+    res.json(locations);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/user/locations', authenticateToken, async (req, res) => {
+  const {
+    label,
+    nationalAddress,
+    city,
+    postalCode,
+    lat,
+    lng,
+    isDefault
+  } = req.body || {};
+
+  const normalizedLabel = String(label || '').trim();
+  const normalizedAddress = String(nationalAddress || '').trim() || null;
+  const normalizedCity = String(city || '').trim() || null;
+  const normalizedPostalCode = String(postalCode || '').trim() || null;
+  const normalizedLat = toOptionalNumber(lat);
+  const normalizedLng = toOptionalNumber(lng);
+
+  if (!normalizedLabel) {
+    return res.status(400).json({ error: 'اسم الموقع مطلوب' });
+  }
+
+  if (!normalizedAddress && !(Number.isFinite(normalizedLat) && Number.isFinite(normalizedLng))) {
+    return res.status(400).json({ error: 'أدخل العنوان أو حدد الموقع من الخريطة' });
+  }
+
+  try {
+    const created = await prisma.$transaction(async (tx) => {
+      if (isDefault) {
+        await tx.userSavedLocation.updateMany({
+          where: { userId: req.user.id, isDefault: true },
+          data: { isDefault: false }
+        });
+      }
+
+      const location = await tx.userSavedLocation.create({
+        data: {
+          userId: req.user.id,
+          label: normalizedLabel,
+          nationalAddress: normalizedAddress,
+          city: normalizedCity,
+          postalCode: normalizedPostalCode,
+          lat: normalizedLat,
+          lng: normalizedLng,
+          isDefault: Boolean(isDefault)
+        },
+        select: savedLocationSelect
+      });
+
+      return location;
+    });
+
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.put('/api/user/locations/:id', authenticateToken, async (req, res) => {
+  const locationId = parseInt(req.params.id, 10);
+  const {
+    label,
+    nationalAddress,
+    city,
+    postalCode,
+    lat,
+    lng,
+    isDefault
+  } = req.body || {};
+
+  if (!Number.isInteger(locationId)) {
+    return res.status(400).json({ error: 'معرّف الموقع غير صالح' });
+  }
+
+  const normalizedLabel = String(label || '').trim();
+  const normalizedAddress = String(nationalAddress || '').trim() || null;
+  const normalizedCity = String(city || '').trim() || null;
+  const normalizedPostalCode = String(postalCode || '').trim() || null;
+  const normalizedLat = toOptionalNumber(lat);
+  const normalizedLng = toOptionalNumber(lng);
+
+  if (!normalizedLabel) {
+    return res.status(400).json({ error: 'اسم الموقع مطلوب' });
+  }
+
+  if (!normalizedAddress && !(Number.isFinite(normalizedLat) && Number.isFinite(normalizedLng))) {
+    return res.status(400).json({ error: 'أدخل العنوان أو حدد الموقع من الخريطة' });
+  }
+
+  try {
+    const existing = await prisma.userSavedLocation.findFirst({
+      where: { id: locationId, userId: req.user.id },
+      select: { id: true }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'الموقع غير موجود' });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (isDefault) {
+        await tx.userSavedLocation.updateMany({
+          where: { userId: req.user.id, isDefault: true, NOT: { id: locationId } },
+          data: { isDefault: false }
+        });
+      }
+
+      return tx.userSavedLocation.update({
+        where: { id: locationId },
+        data: {
+          label: normalizedLabel,
+          nationalAddress: normalizedAddress,
+          city: normalizedCity,
+          postalCode: normalizedPostalCode,
+          lat: normalizedLat,
+          lng: normalizedLng,
+          isDefault: Boolean(isDefault)
+        },
+        select: savedLocationSelect
+      });
+    });
+
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/user/locations/:id', authenticateToken, async (req, res) => {
+  const locationId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(locationId)) {
+    return res.status(400).json({ error: 'معرّف الموقع غير صالح' });
+  }
+
+  try {
+    const existing = await prisma.userSavedLocation.findFirst({
+      where: { id: locationId, userId: req.user.id },
+      select: { id: true, isDefault: true }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'الموقع غير موجود' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.userSavedLocation.delete({ where: { id: locationId } });
+
+      if (existing.isDefault) {
+        const fallbackLocation = await tx.userSavedLocation.findFirst({
+          where: { userId: req.user.id },
+          orderBy: { updatedAt: 'desc' },
+          select: { id: true }
+        });
+
+        if (fallbackLocation) {
+          await tx.userSavedLocation.update({
+            where: { id: fallbackLocation.id },
+            data: { isDefault: true }
+          });
+        }
+      }
+    });
+
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -1291,10 +1507,13 @@ app.get('/api/shipping', async (req, res) => {
 });
 
 app.post('/api/shipping/estimate', async (req, res) => {
-  const { nationalAddress, city, postalCode } = req.body || {};
+  const { nationalAddress, city, postalCode, customerLat, customerLng, locationSource } = req.body || {};
+  const normalizedCustomerLat = toOptionalNumber(customerLat);
+  const normalizedCustomerLng = toOptionalNumber(customerLng);
+  const hasCustomerCoordinates = Number.isFinite(normalizedCustomerLat) && Number.isFinite(normalizedCustomerLng);
 
-  if (!nationalAddress || String(nationalAddress).trim().length < 6) {
-    return res.status(400).json({ error: 'الرجاء إدخال العنوان الوطني بشكل صحيح' });
+  if (!hasCustomerCoordinates && (!nationalAddress || String(nationalAddress).trim().length < 6)) {
+    return res.status(400).json({ error: 'الرجاء إدخال العنوان الوطني بشكل صحيح أو تحديد الموقع من الخريطة.' });
   }
 
   try {
@@ -1302,11 +1521,15 @@ app.post('/api/shipping/estimate', async (req, res) => {
     const estimatorConfig = buildShippingEstimatorConfig(settings);
     const cityKey = resolveCityKey({ city, nationalAddress, postalCode });
 
-    const destinationFromGeocode = await geocodeSaudiAddress({ nationalAddress, city, postalCode });
-    const destination = destinationFromGeocode
-      ? { lat: destinationFromGeocode.lat, lng: destinationFromGeocode.lng }
-      : (cityKey && CITY_COORDINATES[cityKey] ? CITY_COORDINATES[cityKey] : null);
-    const destinationIsGeocoded = Boolean(destinationFromGeocode);
+    const destinationFromGeocode = hasCustomerCoordinates
+      ? null
+      : await geocodeSaudiAddress({ nationalAddress, city, postalCode });
+    const destination = hasCustomerCoordinates
+      ? { lat: normalizedCustomerLat, lng: normalizedCustomerLng }
+      : (destinationFromGeocode
+        ? { lat: destinationFromGeocode.lat, lng: destinationFromGeocode.lng }
+        : (cityKey && CITY_COORDINATES[cityKey] ? CITY_COORDINATES[cityKey] : null));
+    const destinationIsPrecise = hasCustomerCoordinates || Boolean(destinationFromGeocode);
 
     if (!destination) {
       const fallbackCarrierPrice = Math.round(Number(estimatorConfig.carrierFixedPrice || 35));
@@ -1362,7 +1585,7 @@ app.post('/api/shipping/estimate', async (req, res) => {
     }
 
     const rawDistanceKm = haversineDistanceKm(storeCoordinates, destination);
-    const bothEndsPrecise = destinationIsGeocoded && storeIsPrecise;
+    const bothEndsPrecise = destinationIsPrecise && storeIsPrecise;
     const distanceKm = Number((!bothEndsPrecise && rawDistanceKm < 0.01
       ? Number(estimatorConfig.intraCityDefaultKm || 25)
       : rawDistanceKm).toFixed(2));
@@ -1388,6 +1611,7 @@ app.post('/api/shipping/estimate', async (req, res) => {
       carrierFixedPrice: Math.round(Number(estimatorConfig.carrierFixedPrice || 35)),
       estimatedDays,
       estimationMode: bothEndsPrecise ? 'real-geocoded' : 'fallback-city-center',
+      locationSource: hasCustomerCoordinates ? (String(locationSource || 'map').trim() || 'map') : 'address',
       currency: 'SAR'
     });
   } catch (error) {
