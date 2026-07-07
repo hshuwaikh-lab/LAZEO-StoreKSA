@@ -5,6 +5,17 @@
     <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LAZEO StoreKSA</title>
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var redirectPath = params.get('p');
+        if (!redirectPath) return;
+
+        var redirectQuery = params.get('q');
+        var target = redirectPath + (redirectQuery ? ('?' + redirectQuery) : '') + window.location.hash;
+        window.history.replaceState(null, '', target);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
