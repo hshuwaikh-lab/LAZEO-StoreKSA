@@ -387,6 +387,64 @@ function getCarrierProviderLabel(provider) {
   return provider === 'smsa' ? 'سمسا' : 'أرامكس';
 }
 
+async function geocodeSaudiAddress({ nationalAddress, city, postalCode }) {
+  if (typeof fetch !== 'function') {
+    return null;
+  }
+
+  const addressLine = String(nationalAddress || '').trim();
+  if (!addressLine) {
+    return null;
+  }
+
+  const queryParts = [
+    addressLine,
+    String(city || '').trim(),
+    String(postalCode || '').trim(),
+    'Saudi Arabia'
+  ].filter(Boolean);
+
+  const query = queryParts.join(', ');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 7000);
+
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=sa&q=${encodeURIComponent(query)}`,
+      {
+        headers: {
+          'User-Agent': 'LAZEO-StoreKSA/1.0 (shipping-estimator)',
+          'Accept-Language': 'ar,en'
+        },
+        signal: controller.signal
+      }
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = await response.json().catch(() => []);
+    const first = Array.isArray(payload) ? payload[0] : null;
+    const lat = Number(first?.lat);
+    const lng = Number(first?.lon);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return null;
+    }
+
+    return {
+      lat,
+      lng,
+      displayName: String(first?.display_name || '')
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function normalizeProductImageUrls(imageValue) {
   if (Array.isArray(imageValue)) {
     return imageValue.flatMap(normalizeProductImageUrls).filter(Boolean);
@@ -1243,35 +1301,42 @@ app.post('/api/shipping/estimate', async (req, res) => {
     const settings = await prisma.storeSettings.findFirst();
     const estimatorConfig = buildShippingEstimatorConfig(settings);
     const cityKey = resolveCityKey({ city, nationalAddress, postalCode });
-    const destination = cityKey ? CITY_COORDINATES[cityKey] : null;
 
-    if (!destination) {
-      const fallbackCarrierPrice = Math.round(Number(estimatorConfig.carrierFixedPrice || 35));
-      const fallbackProvider = estimatorConfig.carrierProvider;
-      const fallbackProviderLabel = getCarrierProviderLabel(fallbackProvider);
-
-      return res.json({
-        shippingType: 'delivery',
-        cityKey: null,
-        distanceKm: null,
-        shippingCost: fallbackCarrierPrice,
-        estimatedShippingCost: fallbackCarrierPrice,
-        isCarrierFixedPrice: true,
-        shippingProvider: fallbackProvider,
-        shippingProviderLabel: fallbackProviderLabel,
-        carrierThreshold: Number(estimatorConfig.carrierThreshold || 0),
-        carrierFixedPrice: fallbackCarrierPrice,
-        estimatedDays: '3-5 أيام',
-        estimationMode: 'fallback-no-city',
-        warning: `تعذر تحديد المدينة من العنوان الوطني، تم اعتماد شحن ${fallbackProviderLabel} بالسعر الثابت.`,
-        currency: 'SAR'
+    const destinationFromGeocode = await geocodeSaudiAddress({ nationalAddress, city, postalCode });
+    if (!destinationFromGeocode) {
+      return res.status(400).json({
+        error: 'تعذر تحديد موقع العميل بدقة من العنوان الوطني. الرجاء إدخال العنوان الوطني الكامل مع المدينة والرمز البريدي.'
       });
     }
 
-    const directDistanceKm = haversineDistanceKm(estimatorConfig.storeCoordinates, destination);
-    const distanceKm = Number((directDistanceKm < 0.01
-      ? Number(estimatorConfig.intraCityDefaultKm || 25)
-      : directDistanceKm).toFixed(2));
+    let storeCoordinates = null;
+    if (settings?.storeLat !== null && settings?.storeLat !== undefined && settings?.storeLng !== null && settings?.storeLng !== undefined) {
+      storeCoordinates = {
+        lat: Number(settings.storeLat),
+        lng: Number(settings.storeLng)
+      };
+    } else {
+      const storeFromGeocode = await geocodeSaudiAddress({
+        nationalAddress: settings?.storeNationalAddress,
+        city: '',
+        postalCode: ''
+      });
+
+      if (storeFromGeocode) {
+        storeCoordinates = { lat: storeFromGeocode.lat, lng: storeFromGeocode.lng };
+      }
+    }
+
+    if (!storeCoordinates || !Number.isFinite(storeCoordinates.lat) || !Number.isFinite(storeCoordinates.lng)) {
+      return res.status(400).json({
+        error: 'تعذر تحديد موقع المتجر بدقة. الرجاء ضبط خط العرض وخط الطول في صفحة إعدادات الشحن.'
+      });
+    }
+
+    const distanceKm = Number(haversineDistanceKm(storeCoordinates, {
+      lat: destinationFromGeocode.lat,
+      lng: destinationFromGeocode.lng
+    }).toFixed(2));
     const estimatedShippingCost = estimateShippingPriceWithConfig(distanceKm, estimatorConfig);
     const shouldUseCarrierFixedPrice = estimatedShippingCost > Number(estimatorConfig.carrierThreshold || 0);
     const shippingCost = shouldUseCarrierFixedPrice
@@ -1293,6 +1358,7 @@ app.post('/api/shipping/estimate', async (req, res) => {
       carrierThreshold: Number(estimatorConfig.carrierThreshold || 0),
       carrierFixedPrice: Math.round(Number(estimatorConfig.carrierFixedPrice || 35)),
       estimatedDays,
+      estimationMode: 'real-geocoded',
       currency: 'SAR'
     });
   } catch (error) {
