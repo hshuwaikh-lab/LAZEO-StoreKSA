@@ -279,6 +279,11 @@ function resolveCityKey({ city, nationalAddress, postalCode }) {
     if (NATIONAL_SHORTCODE_CITY[shortCodePrefix]) {
       return NATIONAL_SHORTCODE_CITY[shortCodePrefix];
     }
+
+    const shortCodePostalPrefix = shortCodeMatch[2].slice(0, 2);
+    if (POSTAL_PREFIX_CITY[shortCodePostalPrefix]) {
+      return POSTAL_PREFIX_CITY[shortCodePostalPrefix];
+    }
   }
 
   let normalizedPostal = normalizeArabicDigits(String(postalCode || '')).replace(/\D/g, '');
@@ -287,6 +292,8 @@ function resolveCityKey({ city, nationalAddress, postalCode }) {
     const postalMatch = normalizedAddressWithDigits.match(/\b(\d{5})\b/);
     if (postalMatch) {
       normalizedPostal = postalMatch[1];
+    } else if (shortCodeMatch) {
+      normalizedPostal = shortCodeMatch[2];
     }
   }
 
