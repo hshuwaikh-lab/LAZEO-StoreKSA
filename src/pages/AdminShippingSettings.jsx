@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import ActionBanner from '../components/ActionBanner';
+import LocationPickerMap from '../components/LocationPickerMap';
 
 const emptyForm = {
   storeNationalAddress: '',
@@ -24,6 +25,12 @@ const AdminShippingSettings = () => {
   const [feedback, setFeedback] = useState(null);
   const labelStyle = { fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 };
   const fieldWrapStyle = { display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: '220px' };
+
+  const parsedStoreLat = Number(form.storeLat);
+  const parsedStoreLng = Number(form.storeLng);
+  const mapStorePosition = Number.isFinite(parsedStoreLat) && Number.isFinite(parsedStoreLng)
+    ? { lat: parsedStoreLat, lng: parsedStoreLng }
+    : null;
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
@@ -179,6 +186,34 @@ const AdminShippingSettings = () => {
                   onChange={(e) => setForm((prev) => ({ ...prev, storeLng: e.target.value }))}
                   style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
                 />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={labelStyle}>تحديد موقع المتجر من الخريطة</label>
+              <LocationPickerMap
+                selectedPosition={mapStorePosition}
+                onPositionChange={(nextLocation) => setForm((prev) => ({
+                  ...prev,
+                  storeLat: Number(nextLocation.lat).toFixed(6),
+                  storeLng: Number(nextLocation.lng).toFixed(6)
+                }))}
+              />
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ color: 'var(--text-light)', fontSize: '0.9rem' }}>
+                  {mapStorePosition
+                    ? `الإحداثيات الحالية: ${mapStorePosition.lat.toFixed(6)}, ${mapStorePosition.lng.toFixed(6)}`
+                    : 'اضغط على الخريطة لتحديد موقع المتجر وتعبئة الحقول تلقائيًا.'}
+                </span>
+                {mapStorePosition ? (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setForm((prev) => ({ ...prev, storeLat: '', storeLng: '' }))}
+                  >
+                    مسح الإحداثيات
+                  </button>
+                ) : null}
               </div>
             </div>
 
