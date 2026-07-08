@@ -1742,10 +1742,12 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
     receiverCity,
     receiverDistrict,
     receiverStreet,
-    receiverNearbyLandmark
+    receiverNearbyLandmark,
+    customOrderId
   } = req.body;
   try {
     const normalizedItems = Array.isArray(items) ? items : [];
+    const isCustomOrderSubmission = normalizedItems.some((item) => item?.isCustomOrder === true) || Boolean(customOrderId);
     const subtotalBeforeShipping = normalizedItems
       .filter((item) => !item?.isShipping)
       .reduce((sum, item) => {
@@ -1775,6 +1777,7 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
 
     const normalizedShippingProvider = String(shippingProvider || '').trim().toLowerCase();
     const requiresCarrierReceiverDetails = normalizedShippingProvider === 'aramex' || normalizedShippingProvider === 'smsa';
+  const requiresReceiverDetails = requiresCarrierReceiverDetails || isCustomOrderSubmission;
 
     const normalizedReceiverName = String(receiverName || '').trim();
     const normalizedReceiverPhone = String(receiverPhone || '').trim();
@@ -1783,11 +1786,13 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
     const normalizedReceiverStreet = String(receiverStreet || '').trim();
     const normalizedReceiverNearbyLandmark = String(receiverNearbyLandmark || '').trim();
 
-    if (requiresCarrierReceiverDetails) {
+    if (requiresReceiverDetails) {
       if (!normalizedReceiverName || !normalizedReceiverPhone || !normalizedReceiverCity || !normalizedReceiverDistrict || !normalizedReceiverStreet || !normalizedReceiverNearbyLandmark) {
-        return res.status(400).json({ error: 'بيانات المستلم كاملة مطلوبة عند الشحن عبر أرامكس أو سمسا' });
+        return res.status(400).json({ error: 'بيانات الشحن الكاملة مطلوبة لهذا الطلب' });
       }
     }
+
+    const resolvedShippingProvider = normalizedShippingProvider || (isCustomOrderSubmission ? 'custom-order' : null);
 
     const newOrder = await prisma.order.create({
       data: {
@@ -1799,7 +1804,7 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
         bankId: parseInt(bankId),
         receiptUrl,
         receiptText,
-        shippingProvider: normalizedShippingProvider || null,
+        shippingProvider: resolvedShippingProvider,
         receiverName: normalizedReceiverName || null,
         receiverPhone: normalizedReceiverPhone || null,
         receiverCity: normalizedReceiverCity || null,

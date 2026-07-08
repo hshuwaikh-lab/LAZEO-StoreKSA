@@ -46,6 +46,8 @@ const Checkout = () => {
 
   const normalizedShippingProvider = String(shippingMethod?.shippingProvider || '').toLowerCase();
   const requiresCarrierReceiverDetails = !isCustomOrderPayment && shippingMethod?.type === 'delivery' && (normalizedShippingProvider === 'aramex' || normalizedShippingProvider === 'smsa');
+  const requiresCustomOrderShippingDetails = isCustomOrderPayment;
+  const requiresReceiverDetails = requiresCarrierReceiverDetails || requiresCustomOrderShippingDetails;
   const shippingProviderLabel = normalizedShippingProvider === 'smsa' ? 'سمسا' : 'أرامكس';
   const shippingCostInteger = Math.round(Number(shippingCost || 0));
 
@@ -85,9 +87,9 @@ const Checkout = () => {
       return;
     }
 
-    if (requiresCarrierReceiverDetails) {
+    if (requiresReceiverDetails) {
       if (!receiverDetails.receiverName.trim() || !receiverDetails.receiverPhone.trim() || !receiverDetails.receiverCity.trim() || !receiverDetails.receiverDistrict.trim() || !receiverDetails.receiverStreet.trim() || !receiverDetails.receiverNearbyLandmark.trim()) {
-        setFeedback({ type: 'error', title: 'بيانات المستلم مطلوبة', message: 'أكمل اسم المستلم والجوال والمدينة والحي والشارع والمعلم القريب قبل إرسال الطلب.' });
+        setFeedback({ type: 'error', title: 'بيانات الشحن مطلوبة', message: 'أكمل اسم المستلم والجوال والمدينة والحي والشارع والمعلم القريب قبل إرسال الطلب.' });
         return;
       }
     }
@@ -154,7 +156,7 @@ const Checkout = () => {
           bankId: selectedBank.id,
           receiptUrl: finalReceiptUrl,
           receiptText: finalReceiptText,
-          shippingProvider: shippingMethod?.shippingProvider || null,
+          shippingProvider: isCustomOrderPayment ? 'custom-order' : (shippingMethod?.shippingProvider || null),
           receiverName: receiverDetails.receiverName.trim() || null,
           receiverPhone: receiverDetails.receiverPhone.trim() || null,
           receiverCity: receiverDetails.receiverCity.trim() || null,
@@ -240,6 +242,11 @@ const Checkout = () => {
               نوع الشحن: {shippingProviderLabel} - مطلوب إدخال بيانات المستلم للتسليم.
             </p>
           )}
+          {requiresCustomOrderShippingDetails && (
+            <p style={{ color: '#92400e', fontWeight: 700 }}>
+              الطلب المخصص يحتاج تفاصيل الشحن كاملة لتجهيز التسليم بعد اعتماد الدفع.
+            </p>
+          )}
           <h3 style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-color)' }}>الإجمالي النهائي: {orderSummaryAmount.toFixed(2)} ر.س</h3>
         </div>
 
@@ -304,9 +311,13 @@ const Checkout = () => {
         {selectedBank && (
           <form onSubmit={handleSubmitOrder} style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '30px' }}>
 
-            {requiresCarrierReceiverDetails && (
+            {requiresReceiverDetails && (
               <div style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <strong>بيانات المستلم للشحن عبر {shippingProviderLabel}</strong>
+                <strong>
+                  {requiresCustomOrderShippingDetails
+                    ? 'بيانات الشحن للطلب المخصص'
+                    : `بيانات المستلم للشحن عبر ${shippingProviderLabel}`}
+                </strong>
                 <input
                   type="text"
                   placeholder="الاسم المستلم"
