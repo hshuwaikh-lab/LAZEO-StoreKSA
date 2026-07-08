@@ -40,12 +40,19 @@ const Profile = () => {
   const [feedback, setFeedback] = useState(null);
   const invoiceRef = useRef(null);
   const { updateUser, user } = useContext(AuthContext);
-  const { addToCart, cartItems } = useCart();
+  const { addToCart, cartItems, removeFromCart } = useCart();
 
   const isCustomOrderInCart = (customOrderId) => {
     return cartItems.some(
       (item) => item?.isCustomOrder && Number(item?.customOrderId) === Number(customOrderId)
     );
+  };
+
+  const getCustomOrderCartItemId = (customOrderId) => {
+    const matchingItem = cartItems.find(
+      (item) => item?.isCustomOrder && Number(item?.customOrderId) === Number(customOrderId)
+    );
+    return matchingItem ? (matchingItem.cartItemId || matchingItem.id) : null;
   };
 
   const addCustomOrderToCart = (customOrder) => {
@@ -383,6 +390,38 @@ const Profile = () => {
     navigate('/cart');
   };
 
+  const handleCancelCustomOrder = async (customOrder) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    setProcessingCustomOrderId(customOrder.id);
+
+    try {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.USER_CUSTOM_ORDER_CANCEL(customOrder.id)), {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'تعذر إلغاء الطلب');
+      }
+
+      const cartItemId = getCustomOrderCartItemId(customOrder.id);
+      if (cartItemId) {
+        removeFromCart(cartItemId);
+      }
+
+      await fetchData();
+      setFeedback({ type: 'success', title: 'تم الإلغاء', message: 'تم إلغاء الطلب المخصص وحذفه من السلة.' });
+    } catch (error) {
+      console.error('Error canceling custom order:', error);
+      setFeedback({ type: 'error', title: 'تعذر الإلغاء', message: error.message || 'حدث خطأ أثناء إلغاء الطلب.' });
+    } finally {
+      setProcessingCustomOrderId(null);
+    }
+  };
+
   if (loading) return <div className="container section text-center">جاري التحميل...</div>;
 
   return (
@@ -666,6 +705,17 @@ const Profile = () => {
                             onClick={() => handleGoToCartWithCustomOrder(co)}
                           >
                             الذهاب للسلة
+                          </button>
+                        )}
+                        {co.priceQuote && (co.status === 'priced' || co.status === 'accepted') && (
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => handleCancelCustomOrder(co)}
+                            disabled={processingCustomOrderId === co.id}
+                            style={{ marginInlineStart: '8px' }}
+                          >
+                            {processingCustomOrderId === co.id ? 'جاري...' : 'إلغاء الطلب'}
                           </button>
                         )}
                       </td>

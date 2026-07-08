@@ -54,6 +54,7 @@ const Cart = () => {
   const [locationSource, setLocationSource] = useState(shippingMethod?.locationSource || 'address');
   const [locatingCustomer, setLocatingCustomer] = useState(false);
   const [estimatingShipping, setEstimatingShipping] = useState(false);
+  const [processingCustomOrderId, setProcessingCustomOrderId] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [couponInput, setCouponInput] = useState(appliedCoupon?.code || '');
   const [couponLoading, setCouponLoading] = useState(false);
@@ -326,6 +327,41 @@ const Cart = () => {
     setFeedback({ type: 'info', title: 'تم إزالة الكوبون', message: 'تم إلغاء الخصم من السلة.' });
   };
 
+  const handleRemoveItem = async (item) => {
+    const cartItemId = item.cartItemId || item.id;
+
+    if (!item?.isCustomOrder || !item?.customOrderId) {
+      removeFromCart(cartItemId);
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setFeedback({ type: 'error', title: 'تسجيل الدخول مطلوب', message: 'سجل الدخول أولاً لإلغاء الطلب المخصص.' });
+      return;
+    }
+
+    setProcessingCustomOrderId(item.customOrderId);
+    try {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.USER_CUSTOM_ORDER_CANCEL(item.customOrderId)), {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'تعذر إلغاء الطلب المخصص');
+      }
+
+      removeFromCart(cartItemId);
+      setFeedback({ type: 'success', title: 'تم الإلغاء', message: 'تم إلغاء الطلب المخصص عند إزالته من السلة.' });
+    } catch (error) {
+      setFeedback({ type: 'error', title: 'تعذر الإلغاء', message: error.message || 'تعذر إلغاء الطلب المخصص حالياً.' });
+    } finally {
+      setProcessingCustomOrderId(null);
+    }
+  };
+
   const handleCheckout = () => {
     if (!user) {
       setFeedback({
@@ -429,7 +465,8 @@ const Cart = () => {
 
                 <button 
                   className="remove-btn" 
-                  onClick={() => removeFromCart(item.cartItemId || item.id)}
+                  onClick={() => handleRemoveItem(item)}
+                  disabled={processingCustomOrderId === item.customOrderId}
                   title={t('remove_item') || 'Remove Item'}
                 >
                   <Trash2 size={20} />
