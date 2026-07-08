@@ -8,6 +8,7 @@ import InvoiceTemplate from '../components/InvoiceTemplate';
 import ActionBanner from '../components/ActionBanner';
 import LocationPickerMap from '../components/LocationPickerMap';
 import { AuthContext } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 
 const emptyLocationForm = {
@@ -39,6 +40,7 @@ const Profile = () => {
   const [feedback, setFeedback] = useState(null);
   const invoiceRef = useRef(null);
   const { updateUser, user } = useContext(AuthContext);
+  const { addToCart } = useCart();
 
   useEffect(() => {
     fetchData();
@@ -296,17 +298,21 @@ const Profile = () => {
         throw new Error(errorData.error || 'تعذر الموافقة على السعر');
       }
 
+      addToCart({
+        id: `custom-order-${customOrder.id}`,
+        nameEn: `Custom Order #${customOrder.id}`,
+        nameAr: `طلب مخصص #${customOrder.id}`,
+        price: Number(customOrder.priceQuote || 0),
+        image: customOrder.attachmentUrl || '/logo.png',
+        isCustomOrder: true,
+        customOrderId: customOrder.id,
+        material: customOrder.material,
+        details: customOrder.details,
+      }, 1, `custom-order-${customOrder.id}`);
+
       await fetchData();
-      navigate('/checkout', {
-        state: {
-          customOrder: {
-            id: customOrder.id,
-            material: customOrder.material,
-            details: customOrder.details,
-            priceQuote: customOrder.priceQuote,
-          }
-        }
-      });
+      setFeedback({ type: 'success', title: 'تمت الموافقة', message: 'تمت إضافة الطلب المخصص إلى السلة بنجاح.' });
+      navigate('/cart');
     } catch (error) {
       console.error('Error accepting custom order:', error);
       setFeedback({ type: 'error', title: 'تعذر الموافقة', message: error.message || 'حدث خطأ أثناء الموافقة على السعر.' });
@@ -554,7 +560,7 @@ const Profile = () => {
           <div>
             <div style={{ marginBottom: '18px', padding: '14px 16px', borderRadius: '10px', background: 'rgba(134,59,255,0.06)', border: '1px solid rgba(134,59,255,0.12)' }}>
               <strong>تسلسل الطلب المخصص</strong>
-              <div style={{ marginTop: '6px', color: 'var(--text-light)' }}>بعد التسعير من الإدارة يظهر زر الموافقة هنا. بعد الموافقة تنتقل مباشرة إلى صفحة الدفع لتحويل المبلغ.</div>
+              <div style={{ marginTop: '6px', color: 'var(--text-light)' }}>بعد التسعير من الإدارة يظهر زر الموافقة هنا. بعد الموافقة يضاف الطلب إلى السلة ويكمل عبر نفس مسار الطلبات العادية.</div>
             </div>
             {customOrders.length === 0 ? <p className="text-center">لا توجد طلبات مخصصة.</p> : (
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right' }}>
@@ -588,16 +594,17 @@ const Profile = () => {
                             onClick={() => handleAcceptCustomOrder(co)}
                             disabled={processingCustomOrderId === co.id}
                           >
-                            {processingCustomOrderId === co.id ? 'جاري...' : 'موافقة والدفع'}
+                            {processingCustomOrderId === co.id ? 'جاري...' : 'موافقة وإضافة للسلة'}
                           </button>
                         )}
                         {co.status === 'accepted' && (
                           <button
                             type="button"
                             className="btn-secondary"
-                            onClick={() => navigate('/checkout', { state: { customOrder: co } })}
+                            onClick={() => handleAcceptCustomOrder(co)}
+                            disabled={processingCustomOrderId === co.id}
                           >
-                            إتمام الدفع
+                            {processingCustomOrderId === co.id ? 'جاري...' : 'إضافة للسلة'}
                           </button>
                         )}
                       </td>

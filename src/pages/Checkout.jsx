@@ -7,6 +7,17 @@ import { Copy } from 'lucide-react';
 import { uploadFileDirect } from '../utils/directUpload';
 import ActionBanner from '../components/ActionBanner';
 import { decorateProductPricing } from '../utils/offers';
+import LocationPickerMap from '../components/LocationPickerMap';
+
+const PICKUP_SHIPPING_METHOD = {
+  id: 'pickup',
+  type: 'pickup',
+  name: 'استلام من المتجر',
+  price: 0,
+  estimatedDays: 'نفس اليوم',
+  isEstimated: true,
+  shippingProvider: 'pickup'
+};
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -23,15 +34,24 @@ const Checkout = () => {
     shippingCost,
     clearCart,
   } = useCart();
-  useContext(AuthContext);
+  const { user } = useContext(AuthContext);
 
   const customOrder = location.state?.customOrder || null;
   const isCustomOrderPayment = Boolean(customOrder);
 
   const [banks, setBanks] = useState([]);
-  const [shippingMethods, setShippingMethods] = useState([]);
   const [selectedBank, setSelectedBank] = useState(null);
-  const [selectedCustomShipping, setSelectedCustomShipping] = useState(null);
+  const [selectedCustomShipping, setSelectedCustomShipping] = useState(PICKUP_SHIPPING_METHOD);
+  const [shippingMode, setShippingMode] = useState('pickup');
+  const [nationalAddress, setNationalAddress] = useState(user?.address || '');
+  const [city, setCity] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [savedLocations, setSavedLocations] = useState([]);
+  const [selectedSavedLocationId, setSelectedSavedLocationId] = useState('');
+  const [customerLocation, setCustomerLocation] = useState(null);
+  const [locationSource, setLocationSource] = useState('address');
+  const [locatingCustomer, setLocatingCustomer] = useState(false);
+  const [estimatingShipping, setEstimatingShipping] = useState(false);
   const [inputType, setInputType] = useState('image');
   const [file, setFile] = useState(null);
   const [receiptText, setReceiptText] = useState('');
@@ -47,9 +67,9 @@ const Checkout = () => {
   });
 
   const normalizedShippingProvider = String(shippingMethod?.shippingProvider || '').toLowerCase();
-  const normalizedCustomShippingProvider = String(selectedCustomShipping?.shippingProvider || selectedCustomShipping?.name || '').toLowerCase();
+  const normalizedCustomShippingProvider = String(selectedCustomShipping?.shippingProvider || '').toLowerCase();
   const requiresCarrierReceiverDetails = !isCustomOrderPayment && shippingMethod?.type === 'delivery' && (normalizedShippingProvider === 'aramex' || normalizedShippingProvider === 'smsa');
-  const requiresCustomOrderShippingDetails = isCustomOrderPayment && selectedCustomShipping?.type === 'delivery' && (normalizedCustomShippingProvider.includes('aramex') || normalizedCustomShippingProvider.includes('smsa'));
+  const requiresCustomOrderShippingDetails = isCustomOrderPayment && shippingMode === 'delivery' && (normalizedCustomShippingProvider.includes('aramex') || normalizedCustomShippingProvider.includes('smsa'));
   const requiresReceiverDetails = requiresCarrierReceiverDetails || requiresCustomOrderShippingDetails;
   const shippingProviderLabel = normalizedShippingProvider === 'smsa' ? 'سمسا' : 'أرامكس';
   const shippingCostInteger = Math.round(Number(shippingCost || 0));
@@ -62,6 +82,48 @@ const Checkout = () => {
     }
     fetchBanks();
   }, [cartItems, navigate, isCustomOrderPayment]);
+
+  useEffect(() => {
+    if (!isCustomOrderPayment) {
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!user || !token) {
+      setSavedLocations([]);
+      return;
+    }
+
+    const loadSavedLocations = async () => {
+      try {
+        const response = await fetch(buildApiUrl(API_ENDPOINTS.USER_LOCATIONS), {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const result = await response.json().catch(() => []);
+        setSavedLocations(Array.isArray(result) ? result : []);
+      } catch {
+        setSavedLocations([]);
+      }
+    };
+
+    loadSavedLocations();
+  }, [isCustomOrderPayment, user]);
+
+  useEffect(() => {
+    if (!isCustomOrderPayment || !savedLocations.length || nationalAddress.trim() || customerLocation) {
+      return;
+    }
+
+    const defaultLocation = savedLocations.find((location) => location.isDefault) || savedLocations[0];
+    if (defaultLocation) {
+      applySavedLocation(defaultLocation);
+    }
+  }, [customerLocation, isCustomOrderPayment, nationalAddress, savedLocations]);
 
   const orderSummaryAmount = useMemo(() => {
     if (isCustomOrderPayment) {
@@ -77,23 +139,135 @@ const Checkout = () => {
         const data = await res.json();
         setBanks(data);
       }
-
-      if (isCustomOrderPayment) {
-        const shippingRes = await fetch(buildApiUrl(API_ENDPOINTS.SHIPPING));
-        if (shippingRes.ok) {
-          const shippingData = await shippingRes.json();
-          const customShippingOptions = [
-            { id: 'pickup', name: 'استلام من المتجر', type: 'pickup', price: 0, estimatedDays: 'فوري' },
-            ...shippingData.map((method) => ({ ...method, type: 'delivery' }))
-          ];
-          setShippingMethods(customShippingOptions);
-          setSelectedCustomShipping(customShippingOptions[0] || null);
-        }
-      }
     } catch (error) {
       console.error(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleShippingModeChange = (mode) => {
+    setShippingMode(mode);
+    if (mode === 'pickup') {
+      setSelectedCustomShipping(PICKUP_SHIPPING_METHOD);
+      return;
+    }
+    setSelectedCustomShipping(null);
+  };
+
+  const handleCustomerLocationChange = (nextLocation, source = 'map') => {
+    setCustomerLocation(nextLocation);
+    setLocationSource(source);
+  };
+
+  const applySavedLocation = (location) => {
+    if (!location) return;
+
+    setSelectedSavedLocationId(String(location.id));
+    setNationalAddress(location.nationalAddress || '');
+    setCity(location.city || '');
+    setPostalCode(location.postalCode || '');
+
+    if (location.lat != null && location.lng != null) {
+      handleCustomerLocationChange({ lat: Number(location.lat), lng: Number(location.lng) }, 'saved-location');
+    } else {
+      setCustomerLocation(null);
+      setLocationSource('address');
+    }
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setFeedback({ type: 'error', title: 'الموقع غير متاح', message: 'المتصفح الحالي لا يدعم تحديد الموقع الجغرافي.' });
+      return;
+    }
+
+    setLocatingCustomer(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextLocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+        handleCustomerLocationChange(nextLocation, 'gps');
+        setFeedback({ type: 'success', title: 'تم تحديد الموقع', message: 'يمكنك الآن مراجعة الدبوس على الخريطة أو حساب قيمة الشحن مباشرة.' });
+        setLocatingCustomer(false);
+      },
+      () => {
+        setFeedback({ type: 'error', title: 'تعذر تحديد الموقع', message: 'امنح صلاحية الموقع أو حدد موقع العميل يدويًا من الخريطة.' });
+        setLocatingCustomer(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
+
+  const handleEstimateShipping = async () => {
+    if (!nationalAddress.trim() && !customerLocation) {
+      setFeedback({ type: 'error', title: 'بيانات الموقع مطلوبة', message: 'أدخل العنوان الوطني أو استخدم الخريطة لتحديد موقع العميل.' });
+      return;
+    }
+
+    setEstimatingShipping(true);
+    try {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.SHIPPING_ESTIMATE), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nationalAddress: nationalAddress.trim(),
+          city: city.trim(),
+          postalCode: postalCode.trim(),
+          customerLat: customerLocation?.lat ?? null,
+          customerLng: customerLocation?.lng ?? null,
+          locationSource
+        })
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setSelectedCustomShipping(null);
+        setFeedback({ type: 'error', title: 'تعذر حساب الشحن', message: result.error || 'تحقق من بيانات العنوان الوطني.' });
+        return;
+      }
+
+      const estimatedMethod = {
+        id: 'delivery-estimate',
+        type: 'delivery',
+        name: result.isCarrierFixedPrice ? `شحن عبر ${result.shippingProviderLabel || 'شركة الشحن'}` : 'شحن للعنوان الوطني',
+        price: Number(result.shippingCost || 0),
+        estimatedDays: result.estimatedDays || '2-4 أيام',
+        distanceKm: result.distanceKm == null ? null : Number(result.distanceKm),
+        nationalAddress: nationalAddress.trim(),
+        city: city.trim(),
+        postalCode: postalCode.trim(),
+        customerLat: customerLocation?.lat ?? null,
+        customerLng: customerLocation?.lng ?? null,
+        locationSource,
+        shippingProvider: result.shippingProvider || 'national-address',
+        shippingProviderLabel: result.shippingProviderLabel || '',
+        isCarrierFixedPrice: Boolean(result.isCarrierFixedPrice),
+        estimatedShippingCost: Number(result.estimatedShippingCost || result.shippingCost || 0),
+        estimationMode: result.estimationMode || 'normal',
+        isEstimated: true
+      };
+
+      setSelectedCustomShipping(estimatedMethod);
+      setFeedback({
+        type: estimatedMethod.estimationMode === 'fallback-no-city' ? 'info' : 'success',
+        title: estimatedMethod.estimationMode === 'fallback-no-city' ? 'تم اعتماد الشحن الثابت' : 'تم تقدير الشحن',
+        message: estimatedMethod.estimationMode === 'fallback-no-city'
+          ? (result.warning || `تم اعتماد ${estimatedMethod.shippingProviderLabel} بالسعر الثابت ${Math.round(estimatedMethod.price)} ر.س.`)
+          : (estimatedMethod.isCarrierFixedPrice
+            ? `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم. تم التحويل تلقائيًا إلى ${estimatedMethod.shippingProviderLabel} بسعر ثابت ${Math.round(estimatedMethod.price)} ر.س.`
+            : `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم، وقيمة الشحن ${Math.round(estimatedMethod.price)} ر.س.`)
+      });
+    } catch {
+      setFeedback({ type: 'error', title: 'خطأ في الاتصال', message: 'تعذر حساب الشحن حالياً. أعد المحاولة.' });
+    } finally {
+      setEstimatingShipping(false);
     }
   };
 
@@ -104,8 +278,8 @@ const Checkout = () => {
       return;
     }
 
-    if (isCustomOrderPayment && !selectedCustomShipping) {
-      setFeedback({ type: 'error', title: 'طريقة الشحن مطلوبة', message: 'اختر طريقة الشحن للطلب المخصص قبل الإرسال.' });
+    if (isCustomOrderPayment && shippingMode === 'delivery' && (!selectedCustomShipping || selectedCustomShipping.type !== 'delivery' || !selectedCustomShipping.isEstimated)) {
+      setFeedback({ type: 'error', title: 'حساب الشحن مطلوب', message: 'الرجاء إدخال العنوان الوطني وحساب قيمة الشحن قبل إرسال الطلب المخصص.' });
       return;
     }
 
@@ -141,6 +315,13 @@ const Checkout = () => {
     }
 
     try {
+      const cartCustomOrderItem = !isCustomOrderPayment
+        ? cartItems.find((item) => item?.isCustomOrder && item?.customOrderId)
+        : null;
+      const resolvedCustomOrderId = isCustomOrderPayment
+        ? customOrder.id
+        : (cartCustomOrderItem?.customOrderId || null);
+
       const orderItems = isCustomOrderPayment
         ? [{
             id: `custom-order-${customOrder.id}`,
@@ -195,7 +376,7 @@ const Checkout = () => {
           receiverDistrict: receiverDetails.receiverDistrict.trim() || null,
           receiverStreet: receiverDetails.receiverStreet.trim() || null,
           receiverNearbyLandmark: receiverDetails.receiverNearbyLandmark.trim() || null,
-          customOrderId: isCustomOrderPayment ? customOrder.id : null
+          customOrderId: resolvedCustomOrderId
         })
       });
 
@@ -289,19 +470,151 @@ const Checkout = () => {
 
         {isCustomOrderPayment && (
           <div style={{ marginBottom: '20px' }}>
-            <p style={{ marginBottom: '10px' }}>اختر طريقة الشحن للطلب المخصص:</p>
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              {shippingMethods.map((method) => (
-                <button
-                  key={method.id}
-                  type="button"
-                  className={selectedCustomShipping?.id === method.id ? 'btn-primary' : 'btn-secondary'}
-                  onClick={() => setSelectedCustomShipping(method)}
-                  style={{ padding: '8px 12px' }}
-                >
-                  {method.name} - {Number(method.price || 0) > 0 ? `${Number(method.price).toFixed(2)} ر.س` : 'مجانًا'}
-                </button>
-              ))}
+            <p style={{ marginBottom: '10px' }}>الشحن</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.95rem' }}>
+                <input
+                  type="radio"
+                  name="customShippingMode"
+                  value="pickup"
+                  checked={shippingMode === 'pickup'}
+                  onChange={() => handleShippingModeChange('pickup')}
+                />
+                <span>استلام من المتجر (مجانًا)</span>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.95rem' }}>
+                <input
+                  type="radio"
+                  name="customShippingMode"
+                  value="delivery"
+                  checked={shippingMode === 'delivery'}
+                  onChange={() => handleShippingModeChange('delivery')}
+                />
+                <span>شحن (حسب العنوان الوطني)</span>
+              </label>
+
+              {shippingMode === 'delivery' && (
+                <div style={{ marginTop: '8px', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '12px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {savedLocations.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label htmlFor="savedLocationSelectCustom" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
+                        اختر من المواقع المحفوظة
+                      </label>
+                      <select
+                        id="savedLocationSelectCustom"
+                        value={selectedSavedLocationId}
+                        onChange={(e) => {
+                          const nextValue = e.target.value;
+                          setSelectedSavedLocationId(nextValue);
+                          const picked = savedLocations.find((location) => String(location.id) === nextValue);
+                          if (picked) {
+                            applySavedLocation(picked);
+                          }
+                        }}
+                        style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                      >
+                        <option value="">اختر موقعًا محفوظًا</option>
+                        {savedLocations.map((location) => (
+                          <option key={location.id} value={location.id}>
+                            {location.label}{location.isDefault ? ' - افتراضي' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label htmlFor="customNationalAddress" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
+                      العنوان الوطني
+                    </label>
+                    <textarea
+                      id="customNationalAddress"
+                      value={nationalAddress}
+                      onChange={(e) => setNationalAddress(e.target.value)}
+                      placeholder="اكتب العنوان الوطني بالكامل"
+                      rows={3}
+                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                    />
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-light)' }}>
+                      يمكنك الحساب بالعناوين، أو تحديد موقع العميل مباشرة عبر GPS والخريطة لنتيجة أدق.
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: '150px' }}>
+                      <label htmlFor="customCity" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
+                        المدينة
+                      </label>
+                      <input
+                        id="customCity"
+                        type="text"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        placeholder="المدينة (اختياري)"
+                        style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: '150px' }}>
+                      <label htmlFor="customPostalCode" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
+                        الرمز البريدي
+                      </label>
+                      <input
+                        id="customPostalCode"
+                        type="text"
+                        value={postalCode}
+                        onChange={(e) => setPostalCode(e.target.value)}
+                        placeholder="الرمز البريدي (اختياري)"
+                        style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <button type="button" className="btn-secondary" onClick={handleUseCurrentLocation} disabled={locatingCustomer}>
+                      {locatingCustomer ? 'جاري تحديد الموقع...' : 'استخدم موقعي الحالي'}
+                    </button>
+                    {customerLocation ? (
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => {
+                          setCustomerLocation(null);
+                          setLocationSource('address');
+                        }}
+                      >
+                        إزالة الموقع المحدد
+                      </button>
+                    ) : null}
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-light)' }}>
+                      {customerLocation
+                        ? `الموقع الحالي: ${customerLocation.lat.toFixed(5)}, ${customerLocation.lng.toFixed(5)}`
+                        : 'يمكنك الضغط على الخريطة لإضافة دبوس وتعديل مكان العميل يدويًا.'}
+                    </span>
+                  </div>
+
+                  <LocationPickerMap
+                    selectedPosition={customerLocation}
+                    onPositionChange={(nextLocation) => handleCustomerLocationChange(nextLocation, 'map')}
+                  />
+
+                  <button type="button" className="btn-secondary" onClick={handleEstimateShipping} disabled={estimatingShipping}>
+                    {estimatingShipping ? 'جاري الحساب...' : 'حساب قيمة الشحن'}
+                  </button>
+
+                  {selectedCustomShipping?.type === 'delivery' && selectedCustomShipping.isEstimated && (
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>
+                      <div>
+                        طريقة التحديد: {selectedCustomShipping.estimationMode === 'real-geocoded' ? 'موقع دقيق عبر GPS/الخريطة' : 'تقدير عبر العنوان والمدينة'}
+                      </div>
+                      {typeof selectedCustomShipping.distanceKm === 'number' && selectedCustomShipping.distanceKm > 0 && (
+                        <div>المسافة التقديرية: {selectedCustomShipping.distanceKm.toFixed(2)} كم</div>
+                      )}
+                      <div>مدة التوصيل المتوقعة: {selectedCustomShipping.estimatedDays}</div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
