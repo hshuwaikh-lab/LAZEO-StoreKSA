@@ -1427,7 +1427,7 @@ app.get('/api/admin/orders', authenticateToken, requireAdmin, async (req, res) =
 
 app.get('/api/admin/custom-orders', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const customOrders = await prisma.customOrder.findMany({ include: { user: { select: { username: true, email: true } } }, orderBy: { createdAt: 'desc' } });
+    const customOrders = await prisma.customOrder.findMany({ include: { user: { select: { username: true, email: true, phone: true, address: true } } }, orderBy: { createdAt: 'desc' } });
     res.json(customOrders);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });

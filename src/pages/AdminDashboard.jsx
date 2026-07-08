@@ -38,6 +38,17 @@ const createEmptyCouponForm = () => ({
   isActive: true,
 });
 
+const extractUrlsFromText = (text) => {
+  if (!text) return [];
+  const matches = text.match(/https?:\/\/[^\s]+/gi);
+  return matches || [];
+};
+
+const isLikelyImageUrl = (url) => {
+  if (!url) return false;
+  return /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(url) || url.startsWith('data:image/');
+};
+
 const AdminDashboard = () => {
   const { logout, user } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -47,6 +58,9 @@ const AdminDashboard = () => {
   const [printingOrder, setPrintingOrder] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [dialog, setDialog] = useState({ open: false, title: '', content: '', mode: 'text', confirmLabel: '', onConfirm: null });
+  const [selectedCustomOrder, setSelectedCustomOrder] = useState(null);
+  const [detailsQuoteValue, setDetailsQuoteValue] = useState('');
+  const [detailsActionLoading, setDetailsActionLoading] = useState(false);
   const [passwordTargetId, setPasswordTargetId] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [dialogText, setDialogText] = useState('');
@@ -142,47 +156,100 @@ const AdminDashboard = () => {
     navigate('/');
   };
 
-  const handleQuoteUpdate = async (id, quoteValue) => {
+  const updateCustomOrderQuote = async (id, quoteValue, options = {}) => {
+    const { refresh = true } = options;
     const token = localStorage.getItem('token');
+
+    const numericQuote = Number(quoteValue);
+    if (!Number.isFinite(numericQuote) || numericQuote <= 0) {
+      setFeedback({ type: 'error', title: 'تسعير غير صالح', message: 'الرجاء إدخال سعر صحيح أكبر من صفر.' });
+      return false;
+    }
+
     try {
       const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_CUSTOM_ORDER_QUOTE(id)), {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceQuote: quoteValue })
+        body: JSON.stringify({ priceQuote: numericQuote })
       });
+
       if (res.ok) {
         setFeedback({ type: 'success', title: 'تمت إضافة التسعير', message: 'تم حفظ سعر الطلب المخصص بنجاح.' });
-        fetchData();
+        if (refresh) {
+          fetchData();
+        }
+        return true;
       }
+
+      const errorData = await res.json().catch(() => ({}));
+      setFeedback({ type: 'error', title: 'تعذر إضافة التسعير', message: errorData.error || 'حدث خطأ أثناء حفظ التسعير.' });
+      return false;
     } catch (error) {
       console.error(error);
       setFeedback({ type: 'error', title: 'تعذر إضافة التسعير', message: 'حدث خطأ أثناء حفظ التسعير.' });
+      return false;
     }
   };
 
+  const handleQuoteUpdate = async (id, quoteValue) => {
+    await updateCustomOrderQuote(id, quoteValue);
+  };
+
   const openCustomOrderDetails = (customOrder) => {
-    const details = [
-      `رقم الطلب: #${customOrder.id}`,
-      `العميل: ${customOrder.user?.username || '-'}`,
-      `البريد الإلكتروني: ${customOrder.user?.email || '-'}`,
-      `المادة: ${customOrder.material || '-'}`,
-      `الحالة: ${customOrder.status || '-'}`,
-      `السعر: ${customOrder.priceQuote != null ? `${customOrder.priceQuote} ر.س` : 'بانتظار التسعير'}`,
-      `تاريخ الإنشاء: ${customOrder.createdAt ? new Date(customOrder.createdAt).toLocaleString() : '-'}`,
-      '',
-      'تفاصيل الطلب:',
-      customOrder.details || '-',
-    ].join('\n');
+    const imageCandidates = [
+      customOrder.attachmentUrl,
+      ...extractUrlsFromText(customOrder.attachmentText),
+      ...extractUrlsFromText(customOrder.details),
+    ].filter(Boolean);
+
+    const uniqueImages = Array.from(new Set(imageCandidates)).filter(isLikelyImageUrl);
+
+    setSelectedCustomOrder({
+      ...customOrder,
+      imageUrls: uniqueImages,
+    });
+    setDetailsQuoteValue(customOrder.priceQuote != null ? String(customOrder.priceQuote) : '');
 
     setDialog({
       open: true,
       title: `تفاصيل الطلب #${customOrder.id}`,
-      content: details,
-      mode: 'text',
+      content: '',
+      mode: 'custom-order-details',
       confirmLabel: '',
       onConfirm: null,
     });
-    setDialogText(details);
+    setDialogText('');
+  };
+
+  const returnCustomOrderToClient = async (id, options = {}) => {
+    const { refresh = true } = options;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_CUSTOM_ORDER_RETURN_TO_CLIENT(id)), {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        setFeedback({ type: 'success', title: 'تم إرجاع الطلب', message: 'تمت إعادة الطلب للعميل بنجاح.' });
+        if (refresh) {
+          fetchData();
+        }
+        return true;
+      }
+
+      const errorData = await res.json().catch(() => ({}));
+      setFeedback({
+        type: 'error',
+        title: 'تعذر إرجاع الطلب',
+        message: errorData.error || 'حدث خطأ أثناء إرجاع الطلب للعميل.'
+      });
+      return false;
+    } catch (error) {
+      console.error(error);
+      setFeedback({ type: 'error', title: 'تعذر إرجاع الطلب', message: 'حدث خطأ أثناء الاتصال بالخادم.' });
+      return false;
+    }
   };
 
   const handleReturnCustomOrderToClient = async (customOrder) => {
@@ -193,31 +260,43 @@ const AdminDashboard = () => {
       mode: 'confirm',
       confirmLabel: 'إرجاع',
       onConfirm: async () => {
-        const token = localStorage.getItem('token');
-        try {
-          const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_CUSTOM_ORDER_RETURN_TO_CLIENT(customOrder.id)), {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-
-          if (res.ok) {
-            setFeedback({ type: 'success', title: 'تم إرجاع الطلب', message: 'تمت إعادة الطلب للعميل بنجاح.' });
-            fetchData();
-            return;
-          }
-
-          const errorData = await res.json().catch(() => ({}));
-          setFeedback({
-            type: 'error',
-            title: 'تعذر إرجاع الطلب',
-            message: errorData.error || 'حدث خطأ أثناء إرجاع الطلب للعميل.'
-          });
-        } catch (error) {
-          console.error(error);
-          setFeedback({ type: 'error', title: 'تعذر إرجاع الطلب', message: 'حدث خطأ أثناء الاتصال بالخادم.' });
-        }
+        await returnCustomOrderToClient(customOrder.id);
       }
     });
+  };
+
+  const handleQuoteUpdateFromDetails = async () => {
+    if (!selectedCustomOrder) return;
+
+    setDetailsActionLoading(true);
+    try {
+      const saved = await updateCustomOrderQuote(selectedCustomOrder.id, detailsQuoteValue, { refresh: false });
+      if (!saved) return;
+
+      const numericQuote = Number(detailsQuoteValue);
+      setSelectedCustomOrder((prev) => prev ? { ...prev, priceQuote: numericQuote, status: 'priced' } : prev);
+      fetchData();
+    } finally {
+      setDetailsActionLoading(false);
+    }
+  };
+
+  const handleReturnToClientFromDetails = async () => {
+    if (!selectedCustomOrder || selectedCustomOrder.status !== 'accepted') return;
+
+    const confirmed = window.confirm(`هل تريد إعادة الطلب #${selectedCustomOrder.id} للعميل؟`);
+    if (!confirmed) return;
+
+    setDetailsActionLoading(true);
+    try {
+      const returned = await returnCustomOrderToClient(selectedCustomOrder.id, { refresh: false });
+      if (!returned) return;
+
+      setSelectedCustomOrder((prev) => prev ? { ...prev, status: 'priced' } : prev);
+      fetchData();
+    } finally {
+      setDetailsActionLoading(false);
+    }
   };
 
   const handleOrderStatusUpdate = async (id, status) => {
@@ -2137,15 +2216,18 @@ const AdminDashboard = () => {
       <Modal
         open={dialog.open}
         title={dialog.title}
-        onClose={() => setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' }))}
+        onClose={() => {
+          setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' }));
+          setSelectedCustomOrder(null);
+        }}
         actions={dialog.mode === 'password' ? [
-          <button key="cancel" type="button" className="btn-secondary" onClick={() => setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' }))}>إلغاء</button>,
+          <button key="cancel" type="button" className="btn-secondary" onClick={() => { setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' })); setSelectedCustomOrder(null); }}>إلغاء</button>,
           <button key="confirm" type="button" className="btn-primary" onClick={handleConfirmAdminPassword}>حفظ كلمة المرور</button>
         ] : dialog.mode === 'confirm' ? [
-          <button key="cancel" type="button" className="btn-secondary" onClick={() => setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' }))}>إلغاء</button>,
+          <button key="cancel" type="button" className="btn-secondary" onClick={() => { setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' })); setSelectedCustomOrder(null); }}>إلغاء</button>,
           <button key="confirm" type="button" className="btn-primary" onClick={handleDialogConfirm}>{dialog.confirmLabel || 'تأكيد'}</button>
         ] : [
-          <button key="close" type="button" className="btn-primary" onClick={() => setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' }))}>إغلاق</button>
+          <button key="close" type="button" className="btn-primary" onClick={() => { setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' })); setSelectedCustomOrder(null); }}>إغلاق</button>
         ]}
       >
         {dialog.mode === 'password' ? (
@@ -2156,6 +2238,88 @@ const AdminDashboard = () => {
             placeholder="أدخل كلمة المرور الجديدة"
             style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #cbd5e1' }}
           />
+        ) : dialog.mode === 'custom-order-details' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '6px' }}>
+              <div><strong>رقم الطلب:</strong> #{selectedCustomOrder?.id || '-'}</div>
+              <div><strong>العميل:</strong> {selectedCustomOrder?.user?.username || '-'}</div>
+              <div><strong>البريد الإلكتروني:</strong> {selectedCustomOrder?.user?.email || '-'}</div>
+              <div><strong>رقم الجوال:</strong> {selectedCustomOrder?.user?.phone || '-'}</div>
+              <div><strong>العنوان:</strong> {selectedCustomOrder?.user?.address || '-'}</div>
+              <div><strong>المادة:</strong> {selectedCustomOrder?.material || '-'}</div>
+              <div><strong>الحالة:</strong> {selectedCustomOrder?.status || '-'}</div>
+              <div><strong>السعر:</strong> {selectedCustomOrder?.priceQuote != null ? `${selectedCustomOrder.priceQuote} ر.س` : 'بانتظار التسعير'}</div>
+              <div><strong>تاريخ الإنشاء:</strong> {selectedCustomOrder?.createdAt ? new Date(selectedCustomOrder.createdAt).toLocaleString() : '-'}</div>
+            </div>
+
+            <div>
+              <strong>تفاصيل الطلب:</strong>
+              <p style={{ whiteSpace: 'pre-wrap', margin: '6px 0 0' }}>{selectedCustomOrder?.details || '-'}</p>
+            </div>
+
+            <div>
+              <strong>النص المرفق من العميل:</strong>
+              <p style={{ whiteSpace: 'pre-wrap', margin: '6px 0 0' }}>{selectedCustomOrder?.attachmentText || '-'}</p>
+            </div>
+
+            <div>
+              <strong>الصور والمرفقات:</strong>
+              {(selectedCustomOrder?.imageUrls?.length || 0) > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '10px', marginTop: '8px' }}>
+                  {selectedCustomOrder.imageUrls.map((imageUrl, index) => (
+                    <a key={`${imageUrl}-${index}`} href={imageUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                      <img
+                        src={imageUrl}
+                        alt={`مرفق الطلب ${index + 1}`}
+                        style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '10px', border: '1px solid #dbe2ea' }}
+                      />
+                    </a>
+                  ))}
+                </div>
+              ) : selectedCustomOrder?.attachmentUrl ? (
+                <div style={{ marginTop: '8px' }}>
+                  <a href={selectedCustomOrder.attachmentUrl} target="_blank" rel="noreferrer">عرض الملف المرفق</a>
+                </div>
+              ) : (
+                <p style={{ margin: '6px 0 0' }}>لا توجد صور مرفقة.</p>
+              )}
+            </div>
+
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
+              <strong>إجراءات من نفس الصفحة:</strong>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="السعر"
+                  value={detailsQuoteValue}
+                  onChange={(event) => setDetailsQuoteValue(event.target.value)}
+                  style={{ width: '130px', padding: '7px 8px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                />
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleQuoteUpdateFromDetails}
+                  disabled={detailsActionLoading}
+                  style={{ padding: '7px 10px' }}
+                >
+                  {detailsActionLoading ? 'جاري...' : 'حفظ التسعير'}
+                </button>
+                {selectedCustomOrder?.status === 'accepted' && (
+                  <button
+                    type="button"
+                    className="btn-solid"
+                    onClick={handleReturnToClientFromDetails}
+                    disabled={detailsActionLoading}
+                    style={{ padding: '7px 10px', background: '#b91c1c', border: 'none', color: 'white' }}
+                  >
+                    إرجاع للعميل
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         ) : (
           <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{dialogText || dialog.content}</p>
         )}
