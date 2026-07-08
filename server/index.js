@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
-const bcrypt = require('bcrypt');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
 const multer = require('multer');
@@ -14,11 +16,24 @@ require('dotenv').config();
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
-const SECRET_KEY = process.env.JWT_SECRET || 'lazeo_super_secret_key_123';
+const isProduction = process.env.NODE_ENV === 'production';
+const DEFAULT_JWT_SECRET = 'lazeo_super_secret_key_123';
+const SECRET_KEY = process.env.JWT_SECRET || (!isProduction ? DEFAULT_JWT_SECRET : '');
+if (!SECRET_KEY) {
+  throw new Error('JWT_SECRET is required in production');
+}
+const JWT_ISSUER = process.env.JWT_ISSUER || 'lazeo-storeksa-api';
+const JWT_AUDIENCE = process.env.JWT_AUDIENCE || 'lazeo-storeksa-client';
+const ADMIN_CREATE_SECRET = process.env.ADMIN_CREATE_SECRET || (!isProduction ? 'LazeoAdmin2026' : '');
+const ENFORCE_HTTPS = isProduction && String(process.env.ENFORCE_HTTPS || 'true').toLowerCase() !== 'false';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'lazeo-uploads';
 const MAX_UPLOAD_SIZE_MB = parseInt(process.env.MAX_UPLOAD_SIZE_MB || '10', 10);
+const GENERAL_RATE_WINDOW_MS = Math.max(parseInt(process.env.GENERAL_RATE_WINDOW_MS || '900000', 10) || 900000, 10000);
+const GENERAL_RATE_MAX_REQUESTS = Math.max(parseInt(process.env.GENERAL_RATE_MAX_REQUESTS || '500', 10) || 500, 50);
+const AUTH_RATE_WINDOW_MS = Math.max(parseInt(process.env.AUTH_RATE_WINDOW_MS || '900000', 10) || 900000, 10000);
+const AUTH_RATE_MAX_ATTEMPTS = Math.max(parseInt(process.env.AUTH_RATE_MAX_ATTEMPTS || '10', 10) || 10, 3);
 const isSupabaseEnabled = Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
 const maxUploadSizeBytes = Number.isNaN(MAX_UPLOAD_SIZE_MB)
   ? 10 * 1024 * 1024
@@ -41,8 +56,80 @@ const supabase = isSupabaseEnabled
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   : null;
 
-app.use(cors());
-app.use(express.json());
+const devAllowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000'
+];
+
+function parseAllowedOrigins() {
+  const configured = String(process.env.CORS_ALLOWED_ORIGINS || process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  if (configured.length > 0) {
+    return configured;
+  }
+
+  return isProduction ? [] : devAllowedOrigins;
+}
+
+const allowedOrigins = new Set(parseAllowedOrigins());
+const allowAllOrigins = allowedOrigins.has('*');
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (allowAllOrigins || allowedOrigins.has(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(null, false);
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+const apiLimiter = rateLimit({
+  windowMs: GENERAL_RATE_WINDOW_MS,
+  max: GENERAL_RATE_MAX_REQUESTS,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === '/health',
+  message: { error: 'تم تجاوز عدد الطلبات المسموح، يرجى المحاولة لاحقًا.' }
+});
+
+const authLimiter = rateLimit({
+  windowMs: AUTH_RATE_WINDOW_MS,
+  max: AUTH_RATE_MAX_ATTEMPTS,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: 'محاولات دخول كثيرة، يرجى المحاولة لاحقًا.' }
+});
+
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+app.use(express.json({ limit: '1mb' }));
+app.use('/api', apiLimiter);
+
+if (ENFORCE_HTTPS) {
+  app.use((req, res, next) => {
+    const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+    if (forwardedProto && forwardedProto !== 'https') {
+      return res.status(403).json({ error: 'HTTPS is required' });
+    }
+    return next();
+  });
+}
 
 app.get('/health', (req, res) => {
   res.json({ ok: true, service: 'lazeo-storeksa-api' });
@@ -100,6 +187,15 @@ function isForgotPasswordRateLimited(req, identifier) {
   recentAttempts.push(now);
   forgotPasswordAttempts.set(key, recentAttempts);
   return false;
+}
+
+function isStrongPassword(password) {
+  const value = String(password || '');
+  if (value.length < 8) return false;
+  const hasUppercase = /[A-Z]/.test(value);
+  const hasLowercase = /[a-z]/.test(value);
+  const hasNumber = /\d/.test(value);
+  return hasUppercase && hasLowercase && hasNumber;
 }
 
 function shouldFallbackToLocalStorage(error) {
@@ -591,7 +687,12 @@ async function deleteSupabaseFileByUrl(fileUrl) {
 async function ensureAdminUser() {
   const adminEmail = 'admin@lazeo.com';
   const adminUsername = 'Admin Lazeo';
-  const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+  const adminPassword = process.env.ADMIN_PASSWORD || (!isProduction ? 'admin123' : '');
+
+  if (!adminPassword) {
+    console.warn('ADMIN_PASSWORD is not configured in production; automatic admin bootstrap is skipped.');
+    return;
+  }
 
   try {
     const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
@@ -635,7 +736,7 @@ async function logDatabaseConnectionStatus() {
 }
 
 // Register Endpoint
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { username, email, password, role, receiveWhatsApp, phone } = req.body;
   try {
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
@@ -643,6 +744,10 @@ app.post('/api/auth/register', async (req, res) => {
 
     if (!normalizedEmail) {
       return res.status(400).json({ error: 'البريد الإلكتروني مطلوب' });
+    }
+
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل وتحتوي حروفًا كبيرة وصغيرة وأرقامًا' });
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
@@ -661,7 +766,7 @@ app.post('/api/auth/register', async (req, res) => {
     
     let userRole = 'customer';
     if (role === 'admin') {
-      if (req.body.adminSecret !== 'LazeoAdmin2026') {
+      if (!ADMIN_CREATE_SECRET || req.body.adminSecret !== ADMIN_CREATE_SECRET) {
         return res.status(403).json({ error: 'رمز الإدارة السري غير صحيح' });
       }
       userRole = 'admin';
@@ -690,7 +795,7 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 // Login Endpoint
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { email, phone, password } = req.body;
   try {
     const identifier = typeof (email || phone) === 'string' ? (email || phone).trim() : '';
@@ -720,7 +825,11 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'بيانات الدخول غير صحيحة' });
     }
 
-    const token = jwt.sign({ id: user.id, role: user.role, username: user.username }, SECRET_KEY, { expiresIn: '1d' });
+    const token = jwt.sign(
+      { id: user.id, role: user.role, username: user.username },
+      SECRET_KEY,
+      { expiresIn: '1d', issuer: JWT_ISSUER, audience: JWT_AUDIENCE, algorithm: 'HS256' }
+    );
     res.json({ message: 'تم تسجيل الدخول بنجاح', token, user: { id: user.id, username: user.username, role: user.role, email: user.email } });
   } catch (error) {
     console.error(error);
@@ -729,7 +838,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // Social Login Endpoint
-app.post('/api/auth/social-login', async (req, res) => {
+app.post('/api/auth/social-login', authLimiter, async (req, res) => {
   const { provider, providerId, email, username } = req.body;
   if (!provider || !providerId || !email) {
     return res.status(400).json({ error: 'بيانات تسجيل الدخول الاجتماعي غير مكتملة' });
@@ -762,7 +871,11 @@ app.post('/api/auth/social-login', async (req, res) => {
       return res.status(403).json({ error: 'الحساب غير مفعل. يرجى التواصل مع الإدارة.' });
     }
 
-    const token = jwt.sign({ id: user.id, role: user.role, username: user.username }, SECRET_KEY, { expiresIn: '1d' });
+    const token = jwt.sign(
+      { id: user.id, role: user.role, username: user.username },
+      SECRET_KEY,
+      { expiresIn: '1d', issuer: JWT_ISSUER, audience: JWT_AUDIENCE, algorithm: 'HS256' }
+    );
     res.json({ message: 'تم تسجيل الدخول بنجاح', token, user: { id: user.id, username: user.username, role: user.role, email: user.email } });
   } catch (error) {
     console.error(error);
@@ -771,7 +884,7 @@ app.post('/api/auth/social-login', async (req, res) => {
 });
 
 // Forgot Password Endpoint
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
   const { phone, email } = req.body;
   try {
     const identifier = typeof (phone || email) === 'string' ? (phone || email).trim() : '';
@@ -817,6 +930,10 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 app.put('/api/user/password', authenticateToken, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   try {
+    if (!isStrongPassword(newPassword)) {
+      return res.status(400).json({ error: 'كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل وتحتوي حروفًا كبيرة وصغيرة وأرقامًا' });
+    }
+
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
     const isValid = await bcrypt.compare(currentPassword, user.password);
     if (!isValid) return res.status(400).json({ error: 'كلمة المرور الحالية غير صحيحة' });
@@ -839,10 +956,14 @@ function authenticateToken(req, res, next) {
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, SECRET_KEY, (err, user) => {
+  jwt.verify(token, SECRET_KEY, {
+    issuer: JWT_ISSUER,
+    audience: JWT_AUDIENCE,
+    algorithms: ['HS256']
+  }, (err, user) => {
     if (err) {
-      console.error("JWT Verification failed:", err.message);
-      return res.status(403).send("Forbidden: " + err.message);
+      console.error('JWT verification failed');
+      return res.status(403).json({ error: 'Unauthorized token' });
     }
     req.user = user;
     next();
