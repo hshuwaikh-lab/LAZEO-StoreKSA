@@ -42,7 +42,7 @@ const Checkout = () => {
   const [banks, setBanks] = useState([]);
   const [selectedBank, setSelectedBank] = useState(null);
   const [selectedCustomShipping, setSelectedCustomShipping] = useState(PICKUP_SHIPPING_METHOD);
-  const [customShippingCarrierProvider, setCustomShippingCarrierProvider] = useState('aramex');
+  const [customShippingCarrierProvider, setCustomShippingCarrierProvider] = useState('');
   const [shippingMode, setShippingMode] = useState('pickup');
   const [nationalAddress, setNationalAddress] = useState(user?.address || '');
   const [city, setCity] = useState('');
@@ -68,9 +68,8 @@ const Checkout = () => {
   });
 
   const normalizedShippingProvider = String(shippingMethod?.shippingProvider || '').toLowerCase();
-  const normalizedCustomShippingProvider = String(selectedCustomShipping?.shippingProvider || '').toLowerCase();
   const requiresCarrierReceiverDetails = !isCustomOrderPayment && shippingMethod?.type === 'delivery';
-  const requiresCustomOrderShippingDetails = isCustomOrderPayment && shippingMode === 'delivery' && (normalizedCustomShippingProvider.includes('aramex') || normalizedCustomShippingProvider.includes('smsa'));
+  const requiresCustomOrderShippingDetails = isCustomOrderPayment && shippingMode === 'delivery';
   const requiresReceiverDetails = requiresCarrierReceiverDetails || requiresCustomOrderShippingDetails;
   const shippingProviderLabel = normalizedShippingProvider === 'smsa' ? 'سمسا' : normalizedShippingProvider === 'aramex' ? 'أرامكس' : 'شحن وطني';
   const shippingCostInteger = Math.round(Number(shippingCost || 0));
@@ -170,7 +169,23 @@ const Checkout = () => {
       setSelectedCustomShipping(PICKUP_SHIPPING_METHOD);
       return;
     }
+    setCustomShippingCarrierProvider('');
     setSelectedCustomShipping(null);
+  };
+
+  const handleCustomCarrierProviderChange = (value) => {
+    setCustomShippingCarrierProvider(value);
+    setSelectedCustomShipping((prev) => {
+      if (!prev || prev.type !== 'delivery') {
+        return prev;
+      }
+      return {
+        ...prev,
+        shippingProvider: value,
+        shippingProviderLabel: value === 'smsa' ? 'سمسا' : 'أرامكس',
+        requiresCarrierSelection: false
+      };
+    });
   };
 
   const handleCustomerLocationChange = (nextLocation, source = 'map') => {
@@ -241,7 +256,7 @@ const Checkout = () => {
           customerLat: customerLocation?.lat ?? null,
           customerLng: customerLocation?.lng ?? null,
           locationSource,
-          requestedCarrierProvider: isCustomOrderPayment ? customShippingCarrierProvider : null
+          requestedCarrierProvider: isCustomOrderPayment ? (customShippingCarrierProvider || null) : null
         })
       });
 
@@ -267,6 +282,7 @@ const Checkout = () => {
         locationSource,
         shippingProvider: result.shippingProvider || 'national-address',
         shippingProviderLabel: result.shippingProviderLabel || '',
+        requiresCarrierSelection: Boolean(result.requiresCarrierSelection),
         isCarrierFixedPrice: Boolean(result.isCarrierFixedPrice),
         estimatedShippingCost: Number(result.estimatedShippingCost || result.shippingCost || 0),
         estimationMode: result.estimationMode || 'normal',
@@ -275,13 +291,17 @@ const Checkout = () => {
 
       setSelectedCustomShipping(estimatedMethod);
       setFeedback({
-        type: estimatedMethod.estimationMode === 'fallback-no-city' ? 'info' : 'success',
-        title: estimatedMethod.estimationMode === 'fallback-no-city' ? 'تم اعتماد الشحن الثابت' : 'تم تقدير الشحن',
-        message: estimatedMethod.estimationMode === 'fallback-no-city'
-          ? (result.warning || `تم اعتماد ${estimatedMethod.shippingProviderLabel} بالسعر الثابت ${Math.round(estimatedMethod.price)} ر.س.`)
-          : (estimatedMethod.isCarrierFixedPrice
-            ? `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم. تم التحويل تلقائيًا إلى ${estimatedMethod.shippingProviderLabel} بسعر ثابت ${Math.round(estimatedMethod.price)} ر.س.`
-            : `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم، وقيمة الشحن ${Math.round(estimatedMethod.price)} ر.س.`)
+        type: estimatedMethod.requiresCarrierSelection ? 'info' : (estimatedMethod.estimationMode === 'fallback-no-city' ? 'info' : 'success'),
+        title: estimatedMethod.requiresCarrierSelection
+          ? 'اختيار شركة الشحن مطلوب'
+          : (estimatedMethod.estimationMode === 'fallback-no-city' ? 'تم اعتماد الشحن الثابت' : 'تم تقدير الشحن'),
+        message: estimatedMethod.requiresCarrierSelection
+          ? 'تجاوز مبلغ الشحن الحد الأقصى. اختر أرامكس أو سمسا للمتابعة.'
+          : (estimatedMethod.estimationMode === 'fallback-no-city'
+            ? (result.warning || `تم اعتماد ${estimatedMethod.shippingProviderLabel} بالسعر الثابت ${Math.round(estimatedMethod.price)} ر.س.`)
+            : (estimatedMethod.isCarrierFixedPrice
+              ? `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم. تم التحويل تلقائيًا إلى ${estimatedMethod.shippingProviderLabel} بسعر ثابت ${Math.round(estimatedMethod.price)} ر.س.`
+              : `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم، وقيمة الشحن ${Math.round(estimatedMethod.price)} ر.س.`))
       });
     } catch {
       setFeedback({ type: 'error', title: 'خطأ في الاتصال', message: 'تعذر حساب الشحن حالياً. أعد المحاولة.' });
@@ -299,6 +319,16 @@ const Checkout = () => {
 
     if (isCustomOrderPayment && shippingMode === 'delivery' && (!selectedCustomShipping || selectedCustomShipping.type !== 'delivery' || !selectedCustomShipping.isEstimated)) {
       setFeedback({ type: 'error', title: 'حساب الشحن مطلوب', message: 'الرجاء إدخال العنوان الوطني وحساب قيمة الشحن قبل إرسال الطلب المخصص.' });
+      return;
+    }
+
+    if (isCustomOrderPayment && shippingMode === 'delivery' && selectedCustomShipping?.isCarrierFixedPrice && !selectedCustomShipping?.shippingProvider) {
+      setFeedback({ type: 'error', title: 'اختيار شركة الشحن مطلوب', message: 'تجاوز مبلغ الشحن الحد الأقصى. اختر أرامكس أو سمسا قبل الإرسال.' });
+      return;
+    }
+
+    if (!isCustomOrderPayment && shippingMethod?.type === 'delivery' && shippingMethod?.isCarrierFixedPrice && !shippingMethod?.shippingProvider) {
+      setFeedback({ type: 'error', title: 'اختيار شركة الشحن مطلوب', message: 'اختر شركة الشحن من السلة (أرامكس أو سمسا) ثم أكمل الدفع.' });
       return;
     }
 
@@ -515,17 +545,18 @@ const Checkout = () => {
 
               {shippingMode === 'delivery' && (
                 <div style={{ marginTop: '8px', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '12px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {isCustomOrderPayment && (
+                  {isCustomOrderPayment && selectedCustomShipping?.isCarrierFixedPrice && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <label htmlFor="customShippingCarrierProvider" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
-                        شركة الشحن
+                        شركة الشحن (إجباري بعد تجاوز الحد الأقصى)
                       </label>
                       <select
                         id="customShippingCarrierProvider"
                         value={customShippingCarrierProvider}
-                        onChange={(e) => setCustomShippingCarrierProvider(e.target.value)}
+                        onChange={(e) => handleCustomCarrierProviderChange(e.target.value)}
                         style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
                       >
+                        <option value="">اختر شركة الشحن</option>
                         <option value="aramex">أرامكس</option>
                         <option value="smsa">سمسا</option>
                       </select>

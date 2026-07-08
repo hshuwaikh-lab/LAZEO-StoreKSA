@@ -1661,8 +1661,9 @@ app.post('/api/shipping/estimate', async (req, res) => {
 
     if (!destination) {
       const fallbackCarrierPrice = Math.round(Number(estimatorConfig.carrierFixedPrice || 35));
-      const fallbackProvider = selectedCarrierProvider || estimatorConfig.carrierProvider;
-      const fallbackProviderLabel = getCarrierProviderLabel(fallbackProvider);
+      const fallbackProvider = selectedCarrierProvider || null;
+      const fallbackProviderLabel = fallbackProvider ? getCarrierProviderLabel(fallbackProvider) : '';
+      const requiresCarrierSelection = !fallbackProvider;
 
       return res.json({
         shippingType: 'delivery',
@@ -1673,11 +1674,14 @@ app.post('/api/shipping/estimate', async (req, res) => {
         isCarrierFixedPrice: true,
         shippingProvider: fallbackProvider,
         shippingProviderLabel: fallbackProviderLabel,
+        requiresCarrierSelection,
         carrierThreshold: Number(estimatorConfig.carrierThreshold || 0),
         carrierFixedPrice: fallbackCarrierPrice,
         estimatedDays: '3-5 أيام',
         estimationMode: 'fallback-no-city',
-        warning: `تعذر تحديد موقع العميل بدقة من العنوان الوطني، تم اعتماد شحن ${fallbackProviderLabel} بالسعر الثابت.`,
+        warning: requiresCarrierSelection
+          ? 'تعذر تحديد الموقع بدقة وتم اعتماد الشحن بالسعر الثابت. اختر شركة الشحن (أرامكس أو سمسا) للمتابعة.'
+          : `تعذر تحديد موقع العميل بدقة من العنوان الوطني، تم اعتماد شحن ${fallbackProviderLabel} بالسعر الثابت.`,
         currency: 'SAR'
       });
     }
@@ -1727,9 +1731,12 @@ app.post('/api/shipping/estimate', async (req, res) => {
       ? Math.round(Number(estimatorConfig.carrierFixedPrice || 35))
       : estimatedShippingCost;
     const shippingProvider = shouldUseCarrierFixedPrice
-      ? (selectedCarrierProvider || estimatorConfig.carrierProvider)
+      ? (selectedCarrierProvider || null)
       : 'national-address';
-    const shippingProviderLabel = shouldUseCarrierFixedPrice ? getCarrierProviderLabel(shippingProvider) : 'شحن وطني';
+    const shippingProviderLabel = shouldUseCarrierFixedPrice
+      ? (shippingProvider ? getCarrierProviderLabel(shippingProvider) : '')
+      : 'شحن وطني';
+    const requiresCarrierSelection = shouldUseCarrierFixedPrice && !shippingProvider;
     const estimatedDays = estimateDeliveryWindow(distanceKm);
 
     return res.json({
@@ -1741,6 +1748,7 @@ app.post('/api/shipping/estimate', async (req, res) => {
       isCarrierFixedPrice: shouldUseCarrierFixedPrice,
       shippingProvider,
       shippingProviderLabel,
+      requiresCarrierSelection,
       carrierThreshold: Number(estimatorConfig.carrierThreshold || 0),
       carrierFixedPrice: Math.round(Number(estimatorConfig.carrierFixedPrice || 35)),
       estimatedDays,

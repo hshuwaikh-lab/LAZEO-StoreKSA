@@ -45,7 +45,9 @@ const Cart = () => {
   const [city, setCity] = useState(shippingMethod?.city || '');
   const [postalCode, setPostalCode] = useState(shippingMethod?.postalCode || '');
   const [shippingCarrierProvider, setShippingCarrierProvider] = useState(
-    shippingMethod?.shippingProvider === 'smsa' ? 'smsa' : 'aramex'
+    shippingMethod?.shippingProvider === 'smsa' || shippingMethod?.shippingProvider === 'aramex'
+      ? shippingMethod.shippingProvider
+      : ''
   );
   const [receiverDetails, setReceiverDetails] = useState({
     receiverName: shippingMethod?.receiverName || '',
@@ -85,7 +87,11 @@ const Cart = () => {
     }
 
     setShippingMode('delivery');
-    setShippingCarrierProvider(shippingMethod.shippingProvider === 'smsa' ? 'smsa' : 'aramex');
+    setShippingCarrierProvider(
+      shippingMethod.shippingProvider === 'smsa' || shippingMethod.shippingProvider === 'aramex'
+        ? shippingMethod.shippingProvider
+        : ''
+    );
     if (shippingMethod.nationalAddress) {
       setNationalAddress(shippingMethod.nationalAddress);
     }
@@ -157,7 +163,23 @@ const Cart = () => {
       return;
     }
 
+    setShippingCarrierProvider('');
     setShippingMethod(null);
+  };
+
+  const handleCarrierProviderChange = (value) => {
+    setShippingCarrierProvider(value);
+    if (shippingMethod?.type === 'delivery' && shippingMethod?.isCarrierFixedPrice) {
+      setShippingMethod((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          shippingProvider: value,
+          shippingProviderLabel: value === 'smsa' ? 'سمسا' : 'أرامكس',
+          requiresCarrierSelection: false
+        };
+      });
+    }
   };
 
   const handleCustomerLocationChange = (nextLocation, source = 'map') => {
@@ -230,7 +252,7 @@ const Cart = () => {
           customerLat: customerLocation?.lat ?? null,
           customerLng: customerLocation?.lng ?? null,
           locationSource,
-          requestedCarrierProvider: shippingCarrierProvider
+          requestedCarrierProvider: shippingCarrierProvider || null
         })
       });
 
@@ -257,6 +279,7 @@ const Cart = () => {
         shippingProvider: result.shippingProvider || 'national-address',
         shippingProviderLabel: result.shippingProviderLabel || '',
         isCarrierFixedPrice: Boolean(result.isCarrierFixedPrice),
+        requiresCarrierSelection: Boolean(result.requiresCarrierSelection),
         estimatedShippingCost: Number(result.estimatedShippingCost || result.shippingCost || 0),
         estimationMode: result.estimationMode || 'normal',
         isEstimated: true,
@@ -270,13 +293,17 @@ const Cart = () => {
 
       setShippingMethod(estimatedMethod);
       setFeedback({
-        type: estimatedMethod.estimationMode === 'fallback-no-city' ? 'info' : 'success',
-        title: estimatedMethod.estimationMode === 'fallback-no-city' ? 'تم اعتماد الشحن الثابت' : 'تم تقدير الشحن',
-        message: estimatedMethod.estimationMode === 'fallback-no-city'
+        type: estimatedMethod.requiresCarrierSelection ? 'info' : (estimatedMethod.estimationMode === 'fallback-no-city' ? 'info' : 'success'),
+        title: estimatedMethod.requiresCarrierSelection
+          ? 'اختر شركة الشحن'
+          : (estimatedMethod.estimationMode === 'fallback-no-city' ? 'تم اعتماد الشحن الثابت' : 'تم تقدير الشحن'),
+        message: estimatedMethod.requiresCarrierSelection
+          ? 'تجاوز مبلغ الشحن الحد الأقصى. اختر أرامكس أو سمسا لإكمال الشحن.'
+          : (estimatedMethod.estimationMode === 'fallback-no-city'
           ? (result.warning || `تم اعتماد ${estimatedMethod.shippingProviderLabel} بالسعر الثابت ${Math.round(estimatedMethod.price)} ر.س.`)
           : (estimatedMethod.isCarrierFixedPrice
             ? `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم. تم التحويل تلقائيًا إلى ${estimatedMethod.shippingProviderLabel} بسعر ثابت ${Math.round(estimatedMethod.price)} ر.س.`
-            : `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم، وقيمة الشحن ${Math.round(estimatedMethod.price)} ر.س.`)
+            : `المسافة التقديرية ${estimatedMethod.distanceKm.toFixed(2)} كم، وقيمة الشحن ${Math.round(estimatedMethod.price)} ر.س.`))
       });
     } catch {
       setFeedback({ type: 'error', title: 'خطأ في الاتصال', message: 'تعذر حساب الشحن حالياً. أعد المحاولة.' });
@@ -426,6 +453,11 @@ const Cart = () => {
       return;
     }
 
+    if (shippingMode === 'delivery' && shippingMethod?.isCarrierFixedPrice && !shippingMethod?.shippingProvider) {
+      setFeedback({ type: 'error', title: 'اختيار شركة الشحن مطلوب', message: 'تجاوز مبلغ الشحن الحد الأقصى. اختر أرامكس أو سمسا أولاً.' });
+      return;
+    }
+
     if (shippingMode === 'delivery') {
       if (!receiverDetails.receiverName.trim() || !receiverDetails.receiverPhone.trim() || !receiverDetails.receiverCity.trim() || !receiverDetails.receiverDistrict.trim() || !receiverDetails.receiverStreet.trim() || !receiverDetails.receiverNearbyLandmark.trim()) {
         setFeedback({ type: 'error', title: 'بيانات الشحن مطلوبة', message: 'أدخل اسم المستلم والجوال والمدينة والحي والشارع والمعلم القريب قبل المتابعة.' });
@@ -558,20 +590,23 @@ const Cart = () => {
 
               {shippingMode === 'delivery' && (
                 <div style={{ marginTop: '8px', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '12px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label htmlFor="shippingCarrierProvider" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
-                      شركة الشحن
-                    </label>
-                    <select
-                      id="shippingCarrierProvider"
-                      value={shippingCarrierProvider}
-                      onChange={(e) => setShippingCarrierProvider(e.target.value)}
-                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
-                    >
-                      <option value="aramex">أرامكس</option>
-                      <option value="smsa">سمسا</option>
-                    </select>
-                  </div>
+                  {shippingMethod?.isCarrierFixedPrice && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label htmlFor="shippingCarrierProvider" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
+                        شركة الشحن (إجباري بعد تجاوز الحد الأقصى)
+                      </label>
+                      <select
+                        id="shippingCarrierProvider"
+                        value={shippingCarrierProvider}
+                        onChange={(e) => handleCarrierProviderChange(e.target.value)}
+                        style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                      >
+                        <option value="">اختر شركة الشحن</option>
+                        <option value="aramex">أرامكس</option>
+                        <option value="smsa">سمسا</option>
+                      </select>
+                    </div>
+                  )}
 
                   {savedLocations.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
