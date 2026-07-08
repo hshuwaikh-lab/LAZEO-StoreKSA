@@ -1,4 +1,5 @@
 import React, { useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { buildApiUrl, API_ENDPOINTS, API_BASE_URL } from '../config/api';
@@ -2396,7 +2397,7 @@ const AdminDashboard = () => {
         )}
       </Modal>
 
-      {previewImageUrl && (
+      {previewImageUrl && typeof document !== 'undefined' && createPortal(
         <div
           style={{
             position: 'fixed',
@@ -2404,7 +2405,7 @@ const AdminDashboard = () => {
             background: 'rgba(2, 6, 23, 0.85)',
             display: 'grid',
             placeItems: 'center',
-            zIndex: 2000,
+            zIndex: 9999,
             padding: '24px'
           }}
           onClick={() => setPreviewImageUrl('')}
@@ -2458,7 +2459,8 @@ const AdminDashboard = () => {
           >
             إغلاق
           </button>
-        </div>
+        </div>,
+        document.body
       )}
 
       {printingOrder && <InvoiceTemplate order={printingOrder} ref={invoiceRef} />}
