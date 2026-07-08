@@ -321,6 +321,34 @@ const AdminDashboard = () => {
     setPreviewImageUrl(previewableImageUrls[prevIndex]);
   }, [previewImageIndex, previewableImageUrls]);
 
+  const handleSaveImage = useCallback(async (imageUrl) => {
+    if (!imageUrl) return;
+
+    try {
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error('download_failed');
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const safeName = imageUrl.split('/').pop()?.split('?')[0] || `custom-order-${Date.now()}`;
+
+      link.href = objectUrl;
+      link.download = safeName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+
+      setFeedback({ type: 'success', title: 'تم حفظ الصورة', message: 'تم تنزيل الصورة على جهازك.' });
+    } catch (error) {
+      window.open(imageUrl, '_blank', 'noopener,noreferrer');
+      setFeedback({ type: 'error', title: 'تنزيل مباشر غير متاح', message: 'تم فتح الصورة في تبويب جديد. استخدم حفظ الصورة من المتصفح.' });
+    }
+  }, []);
+
   const handlePreviewImageClick = useCallback((event) => {
     event.stopPropagation();
     if (previewableImageUrls.length <= 1) return;
@@ -2349,6 +2377,14 @@ const AdminDashboard = () => {
                       >
                         تكبير
                       </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => handleSaveImage(mediaUrl)}
+                        style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                      >
+                        حفظ الصورة
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -2451,6 +2487,14 @@ const AdminDashboard = () => {
               </div>
             </>
           )}
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={(event) => { event.stopPropagation(); handleSaveImage(previewImageUrl); }}
+            style={{ position: 'fixed', top: '20px', left: '20px' }}
+          >
+            حفظ الصورة
+          </button>
           <button
             type="button"
             className="btn-secondary"
