@@ -2369,22 +2369,24 @@ const AdminDashboard = () => {
                           style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '10px', border: '1px solid #dbe2ea', cursor: 'zoom-in' }}
                         />
                       </button>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={() => setPreviewImageUrl(mediaUrl)}
-                        style={{ padding: '4px 8px', fontSize: '0.8rem' }}
-                      >
-                        تكبير
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={() => handleSaveImage(mediaUrl)}
-                        style={{ padding: '4px 8px', fontSize: '0.8rem' }}
-                      >
-                        حفظ الصورة
-                      </button>
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => setPreviewImageUrl(mediaUrl)}
+                          style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                        >
+                          تكبير
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={() => handleSaveImage(mediaUrl)}
+                          style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                        >
+                          حفظ الصورة
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -2487,22 +2489,22 @@ const AdminDashboard = () => {
               </div>
             </>
           )}
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={(event) => { event.stopPropagation(); handleSaveImage(previewImageUrl); }}
-            style={{ position: 'fixed', top: '20px', left: '20px' }}
-          >
-            حفظ الصورة
-          </button>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => setPreviewImageUrl('')}
-            style={{ position: 'fixed', top: '20px', right: '20px' }}
-          >
-            إغلاق
-          </button>
+          <div style={{ position: 'fixed', top: '20px', right: '20px', display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={(event) => { event.stopPropagation(); handleSaveImage(previewImageUrl); }}
+            >
+              حفظ الصورة
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setPreviewImageUrl('')}
+            >
+              إغلاق
+            </button>
+          </div>
         </div>,
         document.body
       )}
