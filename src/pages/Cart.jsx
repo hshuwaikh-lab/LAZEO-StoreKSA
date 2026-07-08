@@ -348,9 +348,26 @@ const Cart = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
 
+      const result = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || 'تعذر إلغاء الطلب المخصص');
+        const serverMessage = String(result?.error || '').trim();
+        const canFallbackRemove =
+          res.status === 404
+          || serverMessage.includes('الطلب غير موجود')
+          || serverMessage.includes('غير موجود');
+
+        if (canFallbackRemove) {
+          removeFromCart(cartItemId);
+          setFeedback({
+            type: 'info',
+            title: 'تم الحذف من السلة',
+            message: 'تم حذف الطلب من السلة، لكن تعذر تحديث حالته في الخادم. غالباً تحتاج نسخة الخادم للتحديث.'
+          });
+          return;
+        }
+
+        throw new Error(serverMessage || 'تعذر إلغاء الطلب المخصص');
       }
 
       removeFromCart(cartItemId);
