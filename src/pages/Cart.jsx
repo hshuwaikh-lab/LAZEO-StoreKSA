@@ -722,7 +722,7 @@ const Cart = () => {
             <div style={{ marginBottom: '20px', textAlign: isAr ? 'right' : 'left' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label htmlFor="shippingCarrierProvider" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
-                  شركة الشحن (إجباري بعد تجاوز الحد الأقصى)
+                  شركة الشحن
                 </label>
                 <select
                   id="shippingCarrierProvider"

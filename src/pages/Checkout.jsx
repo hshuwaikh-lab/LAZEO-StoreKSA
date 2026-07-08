@@ -548,7 +548,7 @@ const Checkout = () => {
                   {isCustomOrderPayment && (selectedCustomShipping?.isCarrierFixedPrice || selectedCustomShipping?.requiresCarrierSelection) && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <label htmlFor="customShippingCarrierProvider" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
-                        شركة الشحن (إجباري بعد تجاوز الحد الأقصى)
+                        شركة الشحن
                       </label>
                       <select
                         id="customShippingCarrierProvider"
