@@ -590,24 +590,6 @@ const Cart = () => {
 
               {shippingMode === 'delivery' && (
                 <div style={{ marginTop: '8px', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '12px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {(shippingMethod?.isCarrierFixedPrice || shippingMethod?.requiresCarrierSelection) && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label htmlFor="shippingCarrierProvider" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
-                        شركة الشحن (إجباري بعد تجاوز الحد الأقصى)
-                      </label>
-                      <select
-                        id="shippingCarrierProvider"
-                        value={shippingCarrierProvider}
-                        onChange={(e) => handleCarrierProviderChange(e.target.value)}
-                        style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
-                      >
-                        <option value="">اختر شركة الشحن</option>
-                        <option value="aramex">أرامكس</option>
-                        <option value="smsa">سمسا</option>
-                      </select>
-                    </div>
-                  )}
-
                   {savedLocations.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label htmlFor="savedLocationSelect" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
@@ -735,6 +717,26 @@ const Cart = () => {
               )}
             </div>
           </div>
+
+          {shippingMode === 'delivery' && (shippingMethod?.isCarrierFixedPrice || shippingMethod?.requiresCarrierSelection) && (
+            <div style={{ marginBottom: '20px', textAlign: isAr ? 'right' : 'left' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label htmlFor="shippingCarrierProvider" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
+                  شركة الشحن (إجباري بعد تجاوز الحد الأقصى)
+                </label>
+                <select
+                  id="shippingCarrierProvider"
+                  value={shippingCarrierProvider}
+                  onChange={(e) => handleCarrierProviderChange(e.target.value)}
+                  style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                >
+                  <option value="">اختر شركة الشحن</option>
+                  <option value="aramex">أرامكس</option>
+                  <option value="smsa">سمسا</option>
+                </select>
+              </div>
+            </div>
+          )}
 
           <div style={{ marginBottom: '20px', textAlign: isAr ? 'right' : 'left' }}>
             <h3 style={{ fontSize: '1.1rem', marginBottom: '10px' }}>كوبون الخصم</h3>
