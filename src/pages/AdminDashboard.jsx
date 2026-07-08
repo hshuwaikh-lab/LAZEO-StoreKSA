@@ -196,17 +196,19 @@ const AdminDashboard = () => {
   };
 
   const openCustomOrderDetails = (customOrder) => {
-    const imageCandidates = [
+    const mediaCandidates = [
       customOrder.attachmentUrl,
       ...extractUrlsFromText(customOrder.attachmentText),
       ...extractUrlsFromText(customOrder.details),
     ].filter(Boolean);
 
-    const uniqueImages = Array.from(new Set(imageCandidates)).filter(isLikelyImageUrl);
+    const uniqueMedia = Array.from(new Set(mediaCandidates));
+    const likelyImageMedia = uniqueMedia.filter(isLikelyImageUrl);
 
     setSelectedCustomOrder({
       ...customOrder,
-      imageUrls: uniqueImages,
+      imageUrls: likelyImageMedia,
+      mediaUrls: uniqueMedia,
     });
     setDetailsQuoteValue(customOrder.priceQuote != null ? String(customOrder.priceQuote) : '');
 
@@ -2264,21 +2266,21 @@ const AdminDashboard = () => {
 
             <div>
               <strong>الصور والمرفقات:</strong>
-              {(selectedCustomOrder?.imageUrls?.length || 0) > 0 ? (
+              {(selectedCustomOrder?.mediaUrls?.length || 0) > 0 ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '10px', marginTop: '8px' }}>
-                  {selectedCustomOrder.imageUrls.map((imageUrl, index) => (
-                    <a key={`${imageUrl}-${index}`} href={imageUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                  {selectedCustomOrder.mediaUrls.map((mediaUrl, index) => (
+                    <div key={`${mediaUrl}-${index}`} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <a href={mediaUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', fontSize: '0.85rem' }}>فتح المرفق {index + 1}</a>
                       <img
-                        src={imageUrl}
+                        src={mediaUrl}
                         alt={`مرفق الطلب ${index + 1}`}
+                        onError={(event) => {
+                          event.currentTarget.style.display = 'none';
+                        }}
                         style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '10px', border: '1px solid #dbe2ea' }}
                       />
-                    </a>
+                    </div>
                   ))}
-                </div>
-              ) : selectedCustomOrder?.attachmentUrl ? (
-                <div style={{ marginTop: '8px' }}>
-                  <a href={selectedCustomOrder.attachmentUrl} target="_blank" rel="noreferrer">عرض الملف المرفق</a>
                 </div>
               ) : (
                 <p style={{ margin: '6px 0 0' }}>لا توجد صور مرفقة.</p>

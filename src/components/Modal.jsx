@@ -23,10 +23,13 @@ const Modal = ({ open, title, children, onClose, actions }) => {
         style={{
           width: '100%',
           maxWidth: '560px',
+          maxHeight: '90vh',
           background: '#fff',
           borderRadius: '18px',
           boxShadow: '0 24px 80px rgba(15, 23, 42, 0.35)',
           padding: '22px',
+          display: 'flex',
+          flexDirection: 'column',
         }}
         onClick={(event) => event.stopPropagation()}
       >
@@ -34,7 +37,7 @@ const Modal = ({ open, title, children, onClose, actions }) => {
           <h3 style={{ margin: 0 }}>{title}</h3>
           <button type="button" className="btn-secondary" onClick={onClose}>إغلاق</button>
         </div>
-        <div style={{ lineHeight: 1.8, color: '#334155' }}>{children}</div>
+        <div style={{ lineHeight: 1.8, color: '#334155', overflowY: 'auto', paddingRight: '4px' }}>{children}</div>
         {actions && <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px', flexWrap: 'wrap' }}>{actions}</div>}
       </div>
     </div>
