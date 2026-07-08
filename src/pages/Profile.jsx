@@ -40,7 +40,7 @@ const Profile = () => {
   const [feedback, setFeedback] = useState(null);
   const invoiceRef = useRef(null);
   const { updateUser, user } = useContext(AuthContext);
-  const { addToCart } = useCart();
+  const { addToCart, cartItems } = useCart();
 
   useEffect(() => {
     fetchData();
@@ -298,7 +298,13 @@ const Profile = () => {
         throw new Error(errorData.error || 'تعذر الموافقة على السعر');
       }
 
-      addToCart({
+      const customCartId = `custom-order-${customOrder.id}`;
+      const alreadyInCart = cartItems.some(
+        (item) => item?.isCustomOrder && Number(item?.customOrderId) === Number(customOrder.id)
+      );
+
+      if (!alreadyInCart) {
+        addToCart({
         id: `custom-order-${customOrder.id}`,
         nameEn: `Custom Order #${customOrder.id}`,
         nameAr: `طلب مخصص #${customOrder.id}`,
@@ -308,10 +314,17 @@ const Profile = () => {
         customOrderId: customOrder.id,
         material: customOrder.material,
         details: customOrder.details,
-      }, 1, `custom-order-${customOrder.id}`);
+      }, 1, customCartId);
+      }
 
       await fetchData();
-      setFeedback({ type: 'success', title: 'تمت الموافقة', message: 'تمت إضافة الطلب المخصص إلى السلة بنجاح.' });
+      setFeedback({
+        type: 'success',
+        title: 'تمت الموافقة',
+        message: alreadyInCart
+          ? 'هذا الطلب المخصص موجود بالفعل في السلة.'
+          : 'تمت إضافة الطلب المخصص إلى السلة بنجاح.'
+      });
       navigate('/cart');
     } catch (error) {
       console.error('Error accepting custom order:', error);
