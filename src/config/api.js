@@ -78,6 +78,7 @@ export const API_ENDPOINTS = {
   ADMIN_ORDERS: '/api/admin/orders',
   ADMIN_ORDER_STATUS: (id) => `/api/admin/orders/${id}/status`,
   ADMIN_ORDER_INVOICE_PRINTED: (id) => `/api/admin/orders/${id}/invoice-printed`,
+  ADMIN_ORDER_DELETE: (id) => `/api/admin/orders/${id}`,
   ADMIN_CUSTOM_ORDERS: '/api/admin/custom-orders',
   ADMIN_CUSTOM_ORDER_QUOTE: (id) => `/api/admin/custom-orders/${id}/quote`,
   ADMIN_CUSTOM_ORDER_RETURN_TO_CLIENT: (id) => `/api/admin/custom-orders/${id}/return-to-client`,

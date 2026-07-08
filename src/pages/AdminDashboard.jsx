@@ -401,6 +401,36 @@ const AdminDashboard = () => {
     }
   };
 
+
+  const handleDeleteOrder = (id) => {
+    setDialog({
+      open: true,
+      title: 'تأكيد حذف الطلب',
+      content: 'هل أنت متأكد من حذف هذا الطلب نهائيًا؟ سيتم حذف الإيصال المرتبط به أيضًا إن وجد.',
+      mode: 'confirm',
+      confirmLabel: 'حذف',
+      onConfirm: async () => {
+        const token = localStorage.getItem('token');
+        try {
+          const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_ORDER_DELETE(id)), {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+
+          if (res.ok) {
+            fetchData();
+            setFeedback({ type: 'success', title: 'تم حذف الطلب', message: 'تم حذف الطلب بنجاح.' });
+          } else {
+            const errorData = await res.json().catch(() => ({}));
+            setFeedback({ type: 'error', title: 'تعذر الحذف', message: errorData.error || 'لم يتم حذف الطلب.' });
+          }
+        } catch (error) {
+          console.error('Error deleting order:', error);
+          setFeedback({ type: 'error', title: 'تعذر الحذف', message: 'حدث خطأ أثناء حذف الطلب.' });
+        }
+      }
+    });
+  };
   // --- Admin Management ---
   const [newAdmin, setNewAdmin] = useState({ username: '', email: '', password: '' });
   const handleCreateAdmin = async (e) => {
@@ -2089,18 +2119,21 @@ const AdminDashboard = () => {
                             </td>
                             <td>{new Date(o.createdAt).toLocaleDateString()}</td>
                             <td>
-                              {phase === 'pending' && (
-                                <div style={{ display: 'flex', gap: '5px' }}>
-                                  <button className="btn-primary" style={{ padding: '5px 10px', background: 'green', border: 'none' }} onClick={() => handleOrderStatusUpdate(o.id, 'execution')}>اعتماد وتوثيق</button>
-                                  <button className="btn-solid" style={{ padding: '5px 10px', background: 'red', border: 'none', color: 'white' }} onClick={() => handleOrderStatusUpdate(o.id, 'rejected')}>رفض</button>
-                                </div>
-                              )}
-                              {phase === 'execution' && (
-                                <button className="btn-primary" style={{ padding: '5px 10px' }} onClick={() => handleOrderStatusUpdate(o.id, 'ready')}>تأكيد الانتهاء</button>
-                              )}
-                              {phase === 'ready' && (
-                                <button className="btn-primary" style={{ padding: '5px 10px' }} onClick={() => handleOrderStatusUpdate(o.id, 'delivered')}>تم التسليم</button>
-                              )}
+                              <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                                {phase === 'pending' && (
+                                  <>
+                                    <button className="btn-primary" style={{ padding: '5px 10px', background: 'green', border: 'none' }} onClick={() => handleOrderStatusUpdate(o.id, 'execution')}>اعتماد وتوثيق</button>
+                                    <button className="btn-solid" style={{ padding: '5px 10px', background: 'red', border: 'none', color: 'white' }} onClick={() => handleOrderStatusUpdate(o.id, 'rejected')}>رفض</button>
+                                  </>
+                                )}
+                                {phase === 'execution' && (
+                                  <button className="btn-primary" style={{ padding: '5px 10px' }} onClick={() => handleOrderStatusUpdate(o.id, 'ready')}>تأكيد الانتهاء</button>
+                                )}
+                                {phase === 'ready' && (
+                                  <button className="btn-primary" style={{ padding: '5px 10px' }} onClick={() => handleOrderStatusUpdate(o.id, 'delivered')}>تم التسليم</button>
+                                )}
+                                <button className="btn-secondary" style={{ padding: '5px 10px', background: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c' }} onClick={() => handleDeleteOrder(o.id)}>حذف</button>
+                              </div>
                             </td>
                           </tr>
                         ))}

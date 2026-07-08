@@ -1894,6 +1894,34 @@ app.put('/api/admin/orders/:id/invoice-printed', authenticateToken, requireAdmin
   }
 });
 
+app.delete('/api/admin/orders/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const orderId = parseInt(req.params.id, 10);
+
+  if (!Number.isInteger(orderId)) {
+    return res.status(400).json({ error: 'معرّف الطلب غير صالح' });
+  }
+
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, receiptUrl: true }
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: 'الطلب غير موجود' });
+    }
+
+    if (order.receiptUrl) {
+      await deleteSupabaseFileByUrl(order.receiptUrl);
+    }
+
+    await prisma.order.delete({ where: { id: orderId } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // --- Products Routes ---
 const parseOptionalOfferPrice = (value) => {
   if (value === '' || value === null || typeof value === 'undefined') {
