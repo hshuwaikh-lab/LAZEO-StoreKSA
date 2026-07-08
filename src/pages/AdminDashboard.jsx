@@ -402,34 +402,28 @@ const AdminDashboard = () => {
   };
 
 
-  const handleDeleteOrder = (id) => {
-    setDialog({
-      open: true,
-      title: 'تأكيد حذف الطلب',
-      content: 'هل أنت متأكد من حذف هذا الطلب نهائيًا؟ سيتم حذف الإيصال المرتبط به أيضًا إن وجد.',
-      mode: 'confirm',
-      confirmLabel: 'حذف',
-      onConfirm: async () => {
-        const token = localStorage.getItem('token');
-        try {
-          const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_ORDER_DELETE(id)), {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
+  const handleDeleteOrder = async (id) => {
+    const confirmed = window.confirm('هل أنت متأكد من حذف هذا الطلب نهائيًا؟ سيتم حذف الإيصال المرتبط به أيضًا إن وجد.');
+    if (!confirmed) return;
 
-          if (res.ok) {
-            fetchData();
-            setFeedback({ type: 'success', title: 'تم حذف الطلب', message: 'تم حذف الطلب بنجاح.' });
-          } else {
-            const errorData = await res.json().catch(() => ({}));
-            setFeedback({ type: 'error', title: 'تعذر الحذف', message: errorData.error || 'لم يتم حذف الطلب.' });
-          }
-        } catch (error) {
-          console.error('Error deleting order:', error);
-          setFeedback({ type: 'error', title: 'تعذر الحذف', message: 'حدث خطأ أثناء حذف الطلب.' });
-        }
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_ORDER_DELETE(id)), {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        fetchData();
+        setFeedback({ type: 'success', title: 'تم حذف الطلب', message: 'تم حذف الطلب بنجاح.' });
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        setFeedback({ type: 'error', title: 'تعذر الحذف', message: errorData.error || 'لم يتم حذف الطلب.' });
       }
-    });
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      setFeedback({ type: 'error', title: 'تعذر الحذف', message: 'حدث خطأ أثناء حذف الطلب.' });
+    }
   };
   // --- Admin Management ---
   const [newAdmin, setNewAdmin] = useState({ username: '', email: '', password: '' });
@@ -2132,7 +2126,7 @@ const AdminDashboard = () => {
                                 {phase === 'ready' && (
                                   <button className="btn-primary" style={{ padding: '5px 10px' }} onClick={() => handleOrderStatusUpdate(o.id, 'delivered')}>تم التسليم</button>
                                 )}
-                                <button className="btn-secondary" style={{ padding: '5px 10px', background: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c' }} onClick={() => handleDeleteOrder(o.id)}>حذف</button>
+                                <button type="button" className="btn-secondary" style={{ padding: '5px 10px', background: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c' }} onClick={() => handleDeleteOrder(o.id)}>حذف</button>
                               </div>
                             </td>
                           </tr>
