@@ -2325,15 +2325,29 @@ const AdminDashboard = () => {
                   {selectedCustomOrder.mediaUrls.map((mediaUrl, index) => (
                     <div key={`${mediaUrl}-${index}`} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <a href={mediaUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', fontSize: '0.85rem' }}>فتح المرفق {index + 1}</a>
-                      <img
-                        src={mediaUrl}
-                        alt={`مرفق الطلب ${index + 1}`}
+                      <button
+                        type="button"
                         onClick={() => setPreviewImageUrl(mediaUrl)}
-                        onError={(event) => {
-                          event.currentTarget.style.display = 'none';
-                        }}
-                        style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '10px', border: '1px solid #dbe2ea', cursor: 'zoom-in' }}
-                      />
+                        style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'zoom-in' }}
+                        title="تكبير الصورة"
+                      >
+                        <img
+                          src={mediaUrl}
+                          alt={`مرفق الطلب ${index + 1}`}
+                          onError={(event) => {
+                            event.currentTarget.style.display = 'none';
+                          }}
+                          style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '10px', border: '1px solid #dbe2ea', cursor: 'zoom-in' }}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => setPreviewImageUrl(mediaUrl)}
+                        style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                      >
+                        تكبير
+                      </button>
                     </div>
                   ))}
                 </div>
