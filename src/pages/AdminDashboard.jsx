@@ -2353,7 +2353,24 @@ const AdminDashboard = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '10px', marginTop: '8px' }}>
                   {selectedCustomOrder.mediaUrls.map((mediaUrl, index) => (
                     <div key={`${mediaUrl}-${index}`} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <a href={mediaUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', fontSize: '0.85rem' }}>فتح المرفق {index + 1}</a>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <a href={mediaUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', fontSize: '0.85rem' }}>فتح المرفق {index + 1}</a>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveImage(mediaUrl)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#0f766e',
+                            fontSize: '0.85rem',
+                            textDecoration: 'underline',
+                            cursor: 'pointer',
+                            padding: 0
+                          }}
+                        >
+                          حفظ الصورة
+                        </button>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setPreviewImageUrl(mediaUrl)}
