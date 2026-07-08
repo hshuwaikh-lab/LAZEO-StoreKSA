@@ -1482,6 +1482,34 @@ app.put('/api/admin/custom-orders/:id/return-to-client', authenticateToken, requ
   const customOrderId = parseInt(req.params.id, 10);
 
   if (Number.isNaN(customOrderId)) {
+
+app.delete('/api/admin/custom-orders/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const customOrderId = parseInt(req.params.id, 10);
+
+  if (Number.isNaN(customOrderId)) {
+    return res.status(400).json({ error: 'معرّف الطلب غير صالح' });
+  }
+
+  try {
+    const customOrder = await prisma.customOrder.findUnique({
+      where: { id: customOrderId },
+      select: { id: true, attachmentUrl: true }
+    });
+
+    if (!customOrder) {
+      return res.status(404).json({ error: 'الطلب غير موجود' });
+    }
+
+    if (customOrder.attachmentUrl) {
+      await deleteSupabaseFileByUrl(customOrder.attachmentUrl);
+    }
+
+    await prisma.customOrder.delete({ where: { id: customOrderId } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
     return res.status(400).json({ error: 'معرّف الطلب غير صالح' });
   }
 
@@ -1603,10 +1631,14 @@ app.get('/api/shipping', async (req, res) => {
 });
 
 app.post('/api/shipping/estimate', async (req, res) => {
-  const { nationalAddress, city, postalCode, customerLat, customerLng, locationSource } = req.body || {};
+  const { nationalAddress, city, postalCode, customerLat, customerLng, locationSource, requestedCarrierProvider } = req.body || {};
   const normalizedCustomerLat = toOptionalNumber(customerLat);
   const normalizedCustomerLng = toOptionalNumber(customerLng);
   const hasCustomerCoordinates = Number.isFinite(normalizedCustomerLat) && Number.isFinite(normalizedCustomerLng);
+  const normalizedRequestedCarrierProvider = String(requestedCarrierProvider || '').trim().toLowerCase();
+  const selectedCarrierProvider = ['aramex', 'smsa'].includes(normalizedRequestedCarrierProvider)
+    ? normalizedRequestedCarrierProvider
+    : null;
 
   if (!hasCustomerCoordinates && (!nationalAddress || String(nationalAddress).trim().length < 6)) {
     return res.status(400).json({ error: 'الرجاء إدخال العنوان الوطني بشكل صحيح أو تحديد الموقع من الخريطة.' });
@@ -1629,7 +1661,7 @@ app.post('/api/shipping/estimate', async (req, res) => {
 
     if (!destination) {
       const fallbackCarrierPrice = Math.round(Number(estimatorConfig.carrierFixedPrice || 35));
-      const fallbackProvider = estimatorConfig.carrierProvider;
+      const fallbackProvider = selectedCarrierProvider || estimatorConfig.carrierProvider;
       const fallbackProviderLabel = getCarrierProviderLabel(fallbackProvider);
 
       return res.json({
@@ -1694,7 +1726,9 @@ app.post('/api/shipping/estimate', async (req, res) => {
     const shippingCost = shouldUseCarrierFixedPrice
       ? Math.round(Number(estimatorConfig.carrierFixedPrice || 35))
       : estimatedShippingCost;
-    const shippingProvider = shouldUseCarrierFixedPrice ? estimatorConfig.carrierProvider : 'national-address';
+    const shippingProvider = shouldUseCarrierFixedPrice
+      ? (selectedCarrierProvider || estimatorConfig.carrierProvider)
+      : 'national-address';
     const shippingProviderLabel = shouldUseCarrierFixedPrice ? getCarrierProviderLabel(shippingProvider) : 'شحن وطني';
     const estimatedDays = estimateDeliveryWindow(distanceKm);
 
@@ -1806,8 +1840,8 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
     }
 
     const normalizedShippingProvider = String(shippingProvider || '').trim().toLowerCase();
-    const requiresCarrierReceiverDetails = normalizedShippingProvider.includes('aramex') || normalizedShippingProvider.includes('smsa');
-    const requiresReceiverDetails = requiresCarrierReceiverDetails;
+    const isDeliveryShipping = normalizedShippingProvider && normalizedShippingProvider !== 'pickup';
+    const requiresReceiverDetails = isDeliveryShipping;
 
     const normalizedReceiverName = String(receiverName || '').trim();
     const normalizedReceiverPhone = String(receiverPhone || '').trim();

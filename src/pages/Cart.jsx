@@ -44,6 +44,17 @@ const Cart = () => {
   const [nationalAddress, setNationalAddress] = useState(shippingMethod?.nationalAddress || user?.address || '');
   const [city, setCity] = useState(shippingMethod?.city || '');
   const [postalCode, setPostalCode] = useState(shippingMethod?.postalCode || '');
+  const [shippingCarrierProvider, setShippingCarrierProvider] = useState(
+    shippingMethod?.shippingProvider === 'smsa' ? 'smsa' : 'aramex'
+  );
+  const [receiverDetails, setReceiverDetails] = useState({
+    receiverName: shippingMethod?.receiverName || '',
+    receiverPhone: shippingMethod?.receiverPhone || '',
+    receiverCity: shippingMethod?.receiverCity || '',
+    receiverDistrict: shippingMethod?.receiverDistrict || '',
+    receiverStreet: shippingMethod?.receiverStreet || '',
+    receiverNearbyLandmark: shippingMethod?.receiverNearbyLandmark || ''
+  });
   const [savedLocations, setSavedLocations] = useState([]);
   const [selectedSavedLocationId, setSelectedSavedLocationId] = useState('');
   const [customerLocation, setCustomerLocation] = useState(
@@ -74,6 +85,7 @@ const Cart = () => {
     }
 
     setShippingMode('delivery');
+    setShippingCarrierProvider(shippingMethod.shippingProvider === 'smsa' ? 'smsa' : 'aramex');
     if (shippingMethod.nationalAddress) {
       setNationalAddress(shippingMethod.nationalAddress);
     }
@@ -89,6 +101,14 @@ const Cart = () => {
     if (shippingMethod.locationSource) {
       setLocationSource(shippingMethod.locationSource);
     }
+    setReceiverDetails({
+      receiverName: shippingMethod.receiverName || '',
+      receiverPhone: shippingMethod.receiverPhone || '',
+      receiverCity: shippingMethod.receiverCity || '',
+      receiverDistrict: shippingMethod.receiverDistrict || '',
+      receiverStreet: shippingMethod.receiverStreet || '',
+      receiverNearbyLandmark: shippingMethod.receiverNearbyLandmark || ''
+    });
   }, [setShippingMethod, shippingMethod, shippingMode]);
 
   useEffect(() => {
@@ -209,7 +229,8 @@ const Cart = () => {
           postalCode: postalCode.trim(),
           customerLat: customerLocation?.lat ?? null,
           customerLng: customerLocation?.lng ?? null,
-          locationSource
+          locationSource,
+          requestedCarrierProvider: shippingCarrierProvider
         })
       });
 
@@ -238,7 +259,13 @@ const Cart = () => {
         isCarrierFixedPrice: Boolean(result.isCarrierFixedPrice),
         estimatedShippingCost: Number(result.estimatedShippingCost || result.shippingCost || 0),
         estimationMode: result.estimationMode || 'normal',
-        isEstimated: true
+        isEstimated: true,
+        receiverName: receiverDetails.receiverName.trim(),
+        receiverPhone: receiverDetails.receiverPhone.trim(),
+        receiverCity: receiverDetails.receiverCity.trim(),
+        receiverDistrict: receiverDetails.receiverDistrict.trim(),
+        receiverStreet: receiverDetails.receiverStreet.trim(),
+        receiverNearbyLandmark: receiverDetails.receiverNearbyLandmark.trim()
       };
 
       setShippingMethod(estimatedMethod);
@@ -399,6 +426,13 @@ const Cart = () => {
       return;
     }
 
+    if (shippingMode === 'delivery') {
+      if (!receiverDetails.receiverName.trim() || !receiverDetails.receiverPhone.trim() || !receiverDetails.receiverCity.trim() || !receiverDetails.receiverDistrict.trim() || !receiverDetails.receiverStreet.trim() || !receiverDetails.receiverNearbyLandmark.trim()) {
+        setFeedback({ type: 'error', title: 'بيانات الشحن مطلوبة', message: 'أدخل اسم المستلم والجوال والمدينة والحي والشارع والمعلم القريب قبل المتابعة.' });
+        return;
+      }
+    }
+
     navigate('/checkout');
   };
 
@@ -524,6 +558,21 @@ const Cart = () => {
 
               {shippingMode === 'delivery' && (
                 <div style={{ marginTop: '8px', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '12px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label htmlFor="shippingCarrierProvider" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
+                      شركة الشحن
+                    </label>
+                    <select
+                      id="shippingCarrierProvider"
+                      value={shippingCarrierProvider}
+                      onChange={(e) => setShippingCarrierProvider(e.target.value)}
+                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                    >
+                      <option value="aramex">أرامكس</option>
+                      <option value="smsa">سمسا</option>
+                    </select>
+                  </div>
+
                   {savedLocations.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label htmlFor="savedLocationSelect" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
@@ -621,6 +670,17 @@ const Cart = () => {
                     selectedPosition={customerLocation}
                     onPositionChange={(nextLocation) => handleCustomerLocationChange(nextLocation, 'map')}
                   />
+
+                  <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '12px', background: 'rgba(255,255,255,0.7)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <strong>بيانات المستلم</strong>
+                    <input type="text" placeholder="اسم المستلم" value={receiverDetails.receiverName} onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverName: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
+                    <input type="text" placeholder="الجوال" value={receiverDetails.receiverPhone} onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverPhone: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
+                    <input type="text" placeholder="المدينة" value={receiverDetails.receiverCity} onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverCity: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
+                    <input type="text" placeholder="الحي" value={receiverDetails.receiverDistrict} onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverDistrict: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
+                    <input type="text" placeholder="الشارع" value={receiverDetails.receiverStreet} onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverStreet: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
+                    <input type="text" placeholder="معلم قريب" value={receiverDetails.receiverNearbyLandmark} onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverNearbyLandmark: e.target.value }))} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
+                  </div>
+
                   <button type="button" className="btn-secondary" onClick={handleEstimateShipping} disabled={estimatingShipping}>
                     {estimatingShipping ? 'جاري الحساب...' : 'حساب قيمة الشحن'}
                   </button>

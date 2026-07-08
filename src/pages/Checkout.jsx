@@ -42,6 +42,7 @@ const Checkout = () => {
   const [banks, setBanks] = useState([]);
   const [selectedBank, setSelectedBank] = useState(null);
   const [selectedCustomShipping, setSelectedCustomShipping] = useState(PICKUP_SHIPPING_METHOD);
+  const [customShippingCarrierProvider, setCustomShippingCarrierProvider] = useState('aramex');
   const [shippingMode, setShippingMode] = useState('pickup');
   const [nationalAddress, setNationalAddress] = useState(user?.address || '');
   const [city, setCity] = useState('');
@@ -68,10 +69,10 @@ const Checkout = () => {
 
   const normalizedShippingProvider = String(shippingMethod?.shippingProvider || '').toLowerCase();
   const normalizedCustomShippingProvider = String(selectedCustomShipping?.shippingProvider || '').toLowerCase();
-  const requiresCarrierReceiverDetails = !isCustomOrderPayment && shippingMethod?.type === 'delivery' && (normalizedShippingProvider === 'aramex' || normalizedShippingProvider === 'smsa');
+  const requiresCarrierReceiverDetails = !isCustomOrderPayment && shippingMethod?.type === 'delivery';
   const requiresCustomOrderShippingDetails = isCustomOrderPayment && shippingMode === 'delivery' && (normalizedCustomShippingProvider.includes('aramex') || normalizedCustomShippingProvider.includes('smsa'));
   const requiresReceiverDetails = requiresCarrierReceiverDetails || requiresCustomOrderShippingDetails;
-  const shippingProviderLabel = normalizedShippingProvider === 'smsa' ? 'سمسا' : 'أرامكس';
+  const shippingProviderLabel = normalizedShippingProvider === 'smsa' ? 'سمسا' : normalizedShippingProvider === 'aramex' ? 'أرامكس' : 'شحن وطني';
   const shippingCostInteger = Math.round(Number(shippingCost || 0));
   const customShippingCost = Number(selectedCustomShipping?.price || 0);
 
@@ -113,6 +114,23 @@ const Checkout = () => {
 
     loadSavedLocations();
   }, [isCustomOrderPayment, user]);
+
+  useEffect(() => {
+    if (isCustomOrderPayment || shippingMethod?.type !== 'delivery') {
+      return;
+    }
+
+    if (shippingMethod.receiverName || shippingMethod.receiverPhone || shippingMethod.receiverCity || shippingMethod.receiverDistrict || shippingMethod.receiverStreet || shippingMethod.receiverNearbyLandmark) {
+      setReceiverDetails({
+        receiverName: shippingMethod.receiverName || '',
+        receiverPhone: shippingMethod.receiverPhone || '',
+        receiverCity: shippingMethod.receiverCity || '',
+        receiverDistrict: shippingMethod.receiverDistrict || '',
+        receiverStreet: shippingMethod.receiverStreet || '',
+        receiverNearbyLandmark: shippingMethod.receiverNearbyLandmark || ''
+      });
+    }
+  }, [isCustomOrderPayment, shippingMethod]);
 
   useEffect(() => {
     if (!isCustomOrderPayment || !savedLocations.length || nationalAddress.trim() || customerLocation) {
@@ -222,7 +240,8 @@ const Checkout = () => {
           postalCode: postalCode.trim(),
           customerLat: customerLocation?.lat ?? null,
           customerLng: customerLocation?.lng ?? null,
-          locationSource
+          locationSource,
+          requestedCarrierProvider: isCustomOrderPayment ? customShippingCarrierProvider : null
         })
       });
 
@@ -496,6 +515,23 @@ const Checkout = () => {
 
               {shippingMode === 'delivery' && (
                 <div style={{ marginTop: '8px', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '12px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {isCustomOrderPayment && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label htmlFor="customShippingCarrierProvider" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
+                        شركة الشحن
+                      </label>
+                      <select
+                        id="customShippingCarrierProvider"
+                        value={customShippingCarrierProvider}
+                        onChange={(e) => setCustomShippingCarrierProvider(e.target.value)}
+                        style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                      >
+                        <option value="aramex">أرامكس</option>
+                        <option value="smsa">سمسا</option>
+                      </select>
+                    </div>
+                  )}
+
                   {savedLocations.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label htmlFor="savedLocationSelectCustom" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
@@ -598,6 +634,52 @@ const Checkout = () => {
                     onPositionChange={(nextLocation) => handleCustomerLocationChange(nextLocation, 'map')}
                   />
 
+                  <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '12px', background: 'rgba(255,255,255,0.7)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <strong>بيانات المستلم</strong>
+                    <input
+                      type="text"
+                      placeholder="اسم المستلم"
+                      value={receiverDetails.receiverName}
+                      onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverName: e.target.value }))}
+                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="الجوال"
+                      value={receiverDetails.receiverPhone}
+                      onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverPhone: e.target.value }))}
+                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="المدينة"
+                      value={receiverDetails.receiverCity}
+                      onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverCity: e.target.value }))}
+                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="الحي"
+                      value={receiverDetails.receiverDistrict}
+                      onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverDistrict: e.target.value }))}
+                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="الشارع"
+                      value={receiverDetails.receiverStreet}
+                      onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverStreet: e.target.value }))}
+                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="معلم قريب"
+                      value={receiverDetails.receiverNearbyLandmark}
+                      onChange={(e) => setReceiverDetails((prev) => ({ ...prev, receiverNearbyLandmark: e.target.value }))}
+                      style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                    />
+                  </div>
+
                   <button type="button" className="btn-secondary" onClick={handleEstimateShipping} disabled={estimatingShipping}>
                     {estimatingShipping ? 'جاري الحساب...' : 'حساب قيمة الشحن'}
                   </button>
@@ -682,11 +764,7 @@ const Checkout = () => {
 
             {requiresReceiverDetails && (
               <div style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <strong>
-                  {requiresCustomOrderShippingDetails
-                    ? 'بيانات الشحن للطلب المخصص'
-                    : `بيانات المستلم للشحن عبر ${shippingProviderLabel}`}
-                </strong>
+                <strong>{requiresCustomOrderShippingDetails ? 'بيانات الشحن للطلب المخصص' : 'بيانات المستلم للشحن'}</strong>
                 <input
                   type="text"
                   placeholder="الاسم المستلم"

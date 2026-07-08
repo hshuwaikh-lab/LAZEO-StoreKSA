@@ -425,6 +425,30 @@ const AdminDashboard = () => {
       setFeedback({ type: 'error', title: 'تعذر الحذف', message: 'حدث خطأ أثناء حذف الطلب.' });
     }
   };
+
+  const handleDeleteCustomOrder = async (id) => {
+    const confirmed = window.confirm('هل أنت متأكد من حذف هذا الطلب المخصص نهائيًا؟ سيتم حذف المرفق المرتبط به أيضًا إن وجد.');
+    if (!confirmed) return;
+
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_CUSTOM_ORDER_DELETE(id)), {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        fetchData();
+        setFeedback({ type: 'success', title: 'تم حذف الطلب المخصص', message: 'تم حذف الطلب المخصص بنجاح.' });
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        setFeedback({ type: 'error', title: 'تعذر الحذف', message: errorData.error || 'لم يتم حذف الطلب المخصص.' });
+      }
+    } catch (error) {
+      console.error('Error deleting custom order:', error);
+      setFeedback({ type: 'error', title: 'تعذر الحذف', message: 'حدث خطأ أثناء حذف الطلب المخصص.' });
+    }
+  };
   // --- Admin Management ---
   const [newAdmin, setNewAdmin] = useState({ username: '', email: '', password: '' });
   const handleCreateAdmin = async (e) => {
@@ -2204,6 +2228,14 @@ const AdminDashboard = () => {
                               إرجاع للعميل
                             </button>
                           )}
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            style={{ padding: '5px 10px', background: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c' }}
+                            onClick={() => handleDeleteCustomOrder(co.id)}
+                          >
+                            حذف
+                          </button>
                         </div>
                       </td>
                     </tr>
