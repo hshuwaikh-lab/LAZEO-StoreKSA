@@ -61,6 +61,7 @@ const AdminDashboard = () => {
   const [selectedCustomOrder, setSelectedCustomOrder] = useState(null);
   const [detailsQuoteValue, setDetailsQuoteValue] = useState('');
   const [detailsActionLoading, setDetailsActionLoading] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState('');
   const [passwordTargetId, setPasswordTargetId] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [dialogText, setDialogText] = useState('');
@@ -220,6 +221,7 @@ const AdminDashboard = () => {
       confirmLabel: '',
       onConfirm: null,
     });
+    setPreviewImageUrl('');
     setDialogText('');
   };
 
@@ -300,6 +302,57 @@ const AdminDashboard = () => {
       setDetailsActionLoading(false);
     }
   };
+
+  const previewableImageUrls = selectedCustomOrder?.imageUrls || [];
+  const previewImageIndex = previewableImageUrls.indexOf(previewImageUrl);
+
+  const showNextPreviewImage = useCallback(() => {
+    if (!previewableImageUrls.length) return;
+    if (previewImageIndex < 0) return;
+    const nextIndex = (previewImageIndex + 1) % previewableImageUrls.length;
+    setPreviewImageUrl(previewableImageUrls[nextIndex]);
+  }, [previewImageIndex, previewableImageUrls]);
+
+  const showPreviousPreviewImage = useCallback(() => {
+    if (!previewableImageUrls.length) return;
+    if (previewImageIndex < 0) return;
+    const prevIndex = (previewImageIndex - 1 + previewableImageUrls.length) % previewableImageUrls.length;
+    setPreviewImageUrl(previewableImageUrls[prevIndex]);
+  }, [previewImageIndex, previewableImageUrls]);
+
+  const handlePreviewImageClick = useCallback((event) => {
+    event.stopPropagation();
+    if (previewableImageUrls.length <= 1) return;
+
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const clickedX = event.clientX - bounds.left;
+    const isRightSide = clickedX >= bounds.width / 2;
+
+    if (isRightSide) {
+      showNextPreviewImage();
+    } else {
+      showPreviousPreviewImage();
+    }
+  }, [previewableImageUrls.length, showNextPreviewImage, showPreviousPreviewImage]);
+
+  useEffect(() => {
+    if (!previewImageUrl) return;
+
+    const handlePreviewKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setPreviewImageUrl('');
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        showNextPreviewImage();
+      } else if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        showPreviousPreviewImage();
+      }
+    };
+
+    window.addEventListener('keydown', handlePreviewKeyDown);
+    return () => window.removeEventListener('keydown', handlePreviewKeyDown);
+  }, [previewImageUrl, showNextPreviewImage, showPreviousPreviewImage]);
 
   const handleOrderStatusUpdate = async (id, status) => {
     const token = localStorage.getItem('token');
@@ -2221,15 +2274,16 @@ const AdminDashboard = () => {
         onClose={() => {
           setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' }));
           setSelectedCustomOrder(null);
+          setPreviewImageUrl('');
         }}
         actions={dialog.mode === 'password' ? [
-          <button key="cancel" type="button" className="btn-secondary" onClick={() => { setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' })); setSelectedCustomOrder(null); }}>إلغاء</button>,
+          <button key="cancel" type="button" className="btn-secondary" onClick={() => { setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' })); setSelectedCustomOrder(null); setPreviewImageUrl(''); }}>إلغاء</button>,
           <button key="confirm" type="button" className="btn-primary" onClick={handleConfirmAdminPassword}>حفظ كلمة المرور</button>
         ] : dialog.mode === 'confirm' ? [
-          <button key="cancel" type="button" className="btn-secondary" onClick={() => { setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' })); setSelectedCustomOrder(null); }}>إلغاء</button>,
+          <button key="cancel" type="button" className="btn-secondary" onClick={() => { setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' })); setSelectedCustomOrder(null); setPreviewImageUrl(''); }}>إلغاء</button>,
           <button key="confirm" type="button" className="btn-primary" onClick={handleDialogConfirm}>{dialog.confirmLabel || 'تأكيد'}</button>
         ] : [
-          <button key="close" type="button" className="btn-primary" onClick={() => { setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' })); setSelectedCustomOrder(null); }}>إغلاق</button>
+          <button key="close" type="button" className="btn-primary" onClick={() => { setDialog((prev) => ({ ...prev, open: false, onConfirm: null, confirmLabel: '' })); setSelectedCustomOrder(null); setPreviewImageUrl(''); }}>إغلاق</button>
         ]}
       >
         {dialog.mode === 'password' ? (
@@ -2274,10 +2328,11 @@ const AdminDashboard = () => {
                       <img
                         src={mediaUrl}
                         alt={`مرفق الطلب ${index + 1}`}
+                        onClick={() => setPreviewImageUrl(mediaUrl)}
                         onError={(event) => {
                           event.currentTarget.style.display = 'none';
                         }}
-                        style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '10px', border: '1px solid #dbe2ea' }}
+                        style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '10px', border: '1px solid #dbe2ea', cursor: 'zoom-in' }}
                       />
                     </div>
                   ))}
@@ -2326,6 +2381,71 @@ const AdminDashboard = () => {
           <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{dialogText || dialog.content}</p>
         )}
       </Modal>
+
+      {previewImageUrl && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(2, 6, 23, 0.85)',
+            display: 'grid',
+            placeItems: 'center',
+            zIndex: 2000,
+            padding: '24px'
+          }}
+          onClick={() => setPreviewImageUrl('')}
+        >
+          <img
+            src={previewImageUrl}
+            alt="معاينة مكبرة"
+            style={{ maxWidth: '92vw', maxHeight: '88vh', objectFit: 'contain', borderRadius: '12px', boxShadow: '0 18px 60px rgba(0,0,0,0.45)' }}
+            onClick={handlePreviewImageClick}
+          />
+          {previewableImageUrls.length > 1 && (
+            <>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={(event) => { event.stopPropagation(); showPreviousPreviewImage(); }}
+                style={{ position: 'fixed', top: '50%', left: '20px', transform: 'translateY(-50%)' }}
+              >
+                السابق
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={(event) => { event.stopPropagation(); showNextPreviewImage(); }}
+                style={{ position: 'fixed', top: '50%', right: '20px', transform: 'translateY(-50%)' }}
+              >
+                التالي
+              </button>
+              <div
+                style={{
+                  position: 'fixed',
+                  bottom: '24px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  color: 'white',
+                  background: 'rgba(15, 23, 42, 0.55)',
+                  padding: '6px 12px',
+                  borderRadius: '999px',
+                  fontSize: '0.9rem'
+                }}
+              >
+                {previewImageIndex + 1} / {previewableImageUrls.length}
+              </div>
+            </>
+          )}
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setPreviewImageUrl('')}
+            style={{ position: 'fixed', top: '20px', right: '20px' }}
+          >
+            إغلاق
+          </button>
+        </div>
+      )}
 
       {printingOrder && <InvoiceTemplate order={printingOrder} ref={invoiceRef} />}
     </div>
