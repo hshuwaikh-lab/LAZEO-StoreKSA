@@ -1776,8 +1776,8 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
     }
 
     const normalizedShippingProvider = String(shippingProvider || '').trim().toLowerCase();
-    const requiresCarrierReceiverDetails = normalizedShippingProvider === 'aramex' || normalizedShippingProvider === 'smsa';
-  const requiresReceiverDetails = requiresCarrierReceiverDetails || isCustomOrderSubmission;
+    const requiresCarrierReceiverDetails = normalizedShippingProvider.includes('aramex') || normalizedShippingProvider.includes('smsa');
+    const requiresReceiverDetails = requiresCarrierReceiverDetails;
 
     const normalizedReceiverName = String(receiverName || '').trim();
     const normalizedReceiverPhone = String(receiverPhone || '').trim();

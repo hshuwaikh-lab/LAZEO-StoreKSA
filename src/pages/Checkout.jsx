@@ -29,7 +29,9 @@ const Checkout = () => {
   const isCustomOrderPayment = Boolean(customOrder);
 
   const [banks, setBanks] = useState([]);
+  const [shippingMethods, setShippingMethods] = useState([]);
   const [selectedBank, setSelectedBank] = useState(null);
+  const [selectedCustomShipping, setSelectedCustomShipping] = useState(null);
   const [inputType, setInputType] = useState('image');
   const [file, setFile] = useState(null);
   const [receiptText, setReceiptText] = useState('');
@@ -45,11 +47,13 @@ const Checkout = () => {
   });
 
   const normalizedShippingProvider = String(shippingMethod?.shippingProvider || '').toLowerCase();
+  const normalizedCustomShippingProvider = String(selectedCustomShipping?.shippingProvider || selectedCustomShipping?.name || '').toLowerCase();
   const requiresCarrierReceiverDetails = !isCustomOrderPayment && shippingMethod?.type === 'delivery' && (normalizedShippingProvider === 'aramex' || normalizedShippingProvider === 'smsa');
-  const requiresCustomOrderShippingDetails = isCustomOrderPayment;
+  const requiresCustomOrderShippingDetails = isCustomOrderPayment && selectedCustomShipping?.type === 'delivery' && (normalizedCustomShippingProvider.includes('aramex') || normalizedCustomShippingProvider.includes('smsa'));
   const requiresReceiverDetails = requiresCarrierReceiverDetails || requiresCustomOrderShippingDetails;
   const shippingProviderLabel = normalizedShippingProvider === 'smsa' ? 'سمسا' : 'أرامكس';
   const shippingCostInteger = Math.round(Number(shippingCost || 0));
+  const customShippingCost = Number(selectedCustomShipping?.price || 0);
 
   useEffect(() => {
     if (!isCustomOrderPayment && cartItems.length === 0) {
@@ -61,10 +65,10 @@ const Checkout = () => {
 
   const orderSummaryAmount = useMemo(() => {
     if (isCustomOrderPayment) {
-      return Number(customOrder?.priceQuote || 0);
+      return Number(customOrder?.priceQuote || 0) + customShippingCost;
     }
     return finalTotal || currentTotal;
-  }, [currentTotal, customOrder, finalTotal, isCustomOrderPayment]);
+  }, [currentTotal, customOrder, customShippingCost, finalTotal, isCustomOrderPayment]);
 
   const fetchBanks = async () => {
     try {
@@ -72,6 +76,19 @@ const Checkout = () => {
       if (res.ok) {
         const data = await res.json();
         setBanks(data);
+      }
+
+      if (isCustomOrderPayment) {
+        const shippingRes = await fetch(buildApiUrl(API_ENDPOINTS.SHIPPING));
+        if (shippingRes.ok) {
+          const shippingData = await shippingRes.json();
+          const customShippingOptions = [
+            { id: 'pickup', name: 'استلام من المتجر', type: 'pickup', price: 0, estimatedDays: 'فوري' },
+            ...shippingData.map((method) => ({ ...method, type: 'delivery' }))
+          ];
+          setShippingMethods(customShippingOptions);
+          setSelectedCustomShipping(customShippingOptions[0] || null);
+        }
       }
     } catch (error) {
       console.error(error);
@@ -84,6 +101,11 @@ const Checkout = () => {
     e.preventDefault();
     if (!selectedBank) {
       setFeedback({ type: 'error', title: 'اختيار البنك مطلوب', message: 'الرجاء اختيار بنك للتحويل أولًا.' });
+      return;
+    }
+
+    if (isCustomOrderPayment && !selectedCustomShipping) {
+      setFeedback({ type: 'error', title: 'طريقة الشحن مطلوبة', message: 'اختر طريقة الشحن للطلب المخصص قبل الإرسال.' });
       return;
     }
 
@@ -129,6 +151,14 @@ const Checkout = () => {
             isCustomOrder: true,
             material: customOrder.material,
             details: customOrder.details
+          }, {
+            id: 'shipping',
+            nameEn: selectedCustomShipping?.type === 'pickup' ? 'Pickup from store' : `Shipping: ${selectedCustomShipping?.name || '-'}`,
+            nameAr: selectedCustomShipping?.type === 'pickup' ? 'استلام من المتجر' : `الشحن: ${selectedCustomShipping?.name || '-'}`,
+            price: customShippingCost,
+            quantity: 1,
+            isShipping: true,
+            image: selectedCustomShipping?.logoUrl || null
           }]
         : ((shippingMethod 
         ? [...cartItems.map((item) => decorateProductPricing(item, { quantity: item.quantity })), { 
@@ -156,7 +186,9 @@ const Checkout = () => {
           bankId: selectedBank.id,
           receiptUrl: finalReceiptUrl,
           receiptText: finalReceiptText,
-          shippingProvider: isCustomOrderPayment ? 'custom-order' : (shippingMethod?.shippingProvider || null),
+          shippingProvider: isCustomOrderPayment
+            ? (selectedCustomShipping?.type === 'pickup' ? 'pickup' : (selectedCustomShipping?.shippingProvider || String(selectedCustomShipping?.name || '').toLowerCase() || 'custom-order'))
+            : (shippingMethod?.shippingProvider || null),
           receiverName: receiverDetails.receiverName.trim() || null,
           receiverPhone: receiverDetails.receiverPhone.trim() || null,
           receiverCity: receiverDetails.receiverCity.trim() || null,
@@ -222,6 +254,11 @@ const Checkout = () => {
         )}
         <div style={{ marginBottom: '20px', padding: '15px', background: 'rgba(0,0,0,0.03)', borderRadius: '8px' }}>
           <p>المجموع الفرعي: {isCustomOrderPayment ? `${Number(customOrder?.priceQuote || 0).toFixed(2)} ر.س` : `${currentTotal.toFixed(2)} ر.س`}</p>
+          {isCustomOrderPayment && (
+            <p>
+              الشحن ({selectedCustomShipping?.name || 'غير محدد'}): {customShippingCost > 0 ? `${customShippingCost.toFixed(2)} ر.س` : 'مجانًا'}
+            </p>
+          )}
           {!isCustomOrderPayment && couponDiscount > 0 && (
             <p style={{ color: '#166534', fontWeight: 700 }}>
               خصم الكوبون {appliedCoupon ? `(${appliedCoupon.code})` : ''}: -{couponDiscount.toFixed(2)} ر.س
@@ -249,6 +286,25 @@ const Checkout = () => {
           )}
           <h3 style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-color)' }}>الإجمالي النهائي: {orderSummaryAmount.toFixed(2)} ر.س</h3>
         </div>
+
+        {isCustomOrderPayment && (
+          <div style={{ marginBottom: '20px' }}>
+            <p style={{ marginBottom: '10px' }}>اختر طريقة الشحن للطلب المخصص:</p>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {shippingMethods.map((method) => (
+                <button
+                  key={method.id}
+                  type="button"
+                  className={selectedCustomShipping?.id === method.id ? 'btn-primary' : 'btn-secondary'}
+                  onClick={() => setSelectedCustomShipping(method)}
+                  style={{ padding: '8px 12px' }}
+                >
+                  {method.name} - {Number(method.price || 0) > 0 ? `${Number(method.price).toFixed(2)} ر.س` : 'مجانًا'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <p style={{ marginBottom: '20px' }}>{isCustomOrderPayment ? 'اختر الحساب البنكي الذي تريد التحويل إليه لإتمام الطلب المخصص:' : 'اختر الحساب البنكي الذي ترغب بالتحويل إليه:'}</p>
         <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
