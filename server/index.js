@@ -1726,7 +1726,13 @@ app.post('/api/shipping/estimate', async (req, res) => {
       ? Number(estimatorConfig.intraCityDefaultKm || 25)
       : resolvedDistanceKm).toFixed(2));
     const estimatedShippingCost = estimateShippingPriceWithConfig(distanceKm, estimatorConfig);
-    const shouldUseCarrierFixedPrice = estimatedShippingCost > Number(estimatorConfig.carrierThreshold || 0);
+    const normalizedCarrierThreshold = Number(estimatorConfig.carrierThreshold || 0);
+    const normalizedMaxShippingCap = Number(estimatorConfig.maxPrice || 0);
+    const reachedMaxShippingCap = Number.isFinite(normalizedMaxShippingCap)
+      && normalizedMaxShippingCap > 0
+      && estimatedShippingCost >= Math.round(normalizedMaxShippingCap);
+    const exceededCarrierThreshold = estimatedShippingCost > normalizedCarrierThreshold;
+    const shouldUseCarrierFixedPrice = exceededCarrierThreshold || reachedMaxShippingCap;
     const shippingCost = shouldUseCarrierFixedPrice
       ? Math.round(Number(estimatorConfig.carrierFixedPrice || 35))
       : estimatedShippingCost;
@@ -1749,8 +1755,9 @@ app.post('/api/shipping/estimate', async (req, res) => {
       shippingProvider,
       shippingProviderLabel,
       requiresCarrierSelection,
-      carrierThreshold: Number(estimatorConfig.carrierThreshold || 0),
+      carrierThreshold: normalizedCarrierThreshold,
       carrierFixedPrice: Math.round(Number(estimatorConfig.carrierFixedPrice || 35)),
+      reachedMaxShippingCap,
       estimatedDays,
       estimationMode: bothEndsPrecise ? 'real-geocoded' : 'fallback-city-center',
       distanceSource: routingDistanceKm ? 'driving-route' : 'haversine',

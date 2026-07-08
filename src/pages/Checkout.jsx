@@ -280,7 +280,7 @@ const Checkout = () => {
         customerLat: customerLocation?.lat ?? null,
         customerLng: customerLocation?.lng ?? null,
         locationSource,
-        shippingProvider: result.shippingProvider || 'national-address',
+        shippingProvider: result.shippingProvider ?? null,
         shippingProviderLabel: result.shippingProviderLabel || '',
         requiresCarrierSelection: Boolean(result.requiresCarrierSelection),
         isCarrierFixedPrice: Boolean(result.isCarrierFixedPrice),
@@ -296,7 +296,7 @@ const Checkout = () => {
           ? 'اختيار شركة الشحن مطلوب'
           : (estimatedMethod.estimationMode === 'fallback-no-city' ? 'تم اعتماد الشحن الثابت' : 'تم تقدير الشحن'),
         message: estimatedMethod.requiresCarrierSelection
-          ? 'تجاوز مبلغ الشحن الحد الأقصى. اختر أرامكس أو سمسا للمتابعة.'
+          ? 'وصل مبلغ الشحن إلى الحد الأقصى أو تجاوزه. اختر أرامكس أو سمسا للمتابعة.'
           : (estimatedMethod.estimationMode === 'fallback-no-city'
             ? (result.warning || `تم اعتماد ${estimatedMethod.shippingProviderLabel} بالسعر الثابت ${Math.round(estimatedMethod.price)} ر.س.`)
             : (estimatedMethod.isCarrierFixedPrice
@@ -545,7 +545,7 @@ const Checkout = () => {
 
               {shippingMode === 'delivery' && (
                 <div style={{ marginTop: '8px', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '12px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {isCustomOrderPayment && selectedCustomShipping?.isCarrierFixedPrice && (
+                  {isCustomOrderPayment && (selectedCustomShipping?.isCarrierFixedPrice || selectedCustomShipping?.requiresCarrierSelection) && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <label htmlFor="customShippingCarrierProvider" style={{ fontSize: '0.95rem', color: '#1f2937', fontWeight: 700 }}>
                         شركة الشحن (إجباري بعد تجاوز الحد الأقصى)
