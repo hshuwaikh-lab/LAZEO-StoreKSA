@@ -1482,34 +1482,6 @@ app.put('/api/admin/custom-orders/:id/return-to-client', authenticateToken, requ
   const customOrderId = parseInt(req.params.id, 10);
 
   if (Number.isNaN(customOrderId)) {
-
-app.delete('/api/admin/custom-orders/:id', authenticateToken, requireAdmin, async (req, res) => {
-  const customOrderId = parseInt(req.params.id, 10);
-
-  if (Number.isNaN(customOrderId)) {
-    return res.status(400).json({ error: 'معرّف الطلب غير صالح' });
-  }
-
-  try {
-    const customOrder = await prisma.customOrder.findUnique({
-      where: { id: customOrderId },
-      select: { id: true, attachmentUrl: true }
-    });
-
-    if (!customOrder) {
-      return res.status(404).json({ error: 'الطلب غير موجود' });
-    }
-
-    if (customOrder.attachmentUrl) {
-      await deleteSupabaseFileByUrl(customOrder.attachmentUrl);
-    }
-
-    await prisma.customOrder.delete({ where: { id: customOrderId } });
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
     return res.status(400).json({ error: 'معرّف الطلب غير صالح' });
   }
 
@@ -1537,6 +1509,34 @@ app.delete('/api/admin/custom-orders/:id', authenticateToken, requireAdmin, asyn
     });
 
     return res.json(updated);
+  } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/admin/custom-orders/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const customOrderId = parseInt(req.params.id, 10);
+
+  if (Number.isNaN(customOrderId)) {
+    return res.status(400).json({ error: 'معرّف الطلب غير صالح' });
+  }
+
+  try {
+    const customOrder = await prisma.customOrder.findUnique({
+      where: { id: customOrderId },
+      select: { id: true, attachmentUrl: true }
+    });
+
+    if (!customOrder) {
+      return res.status(404).json({ error: 'الطلب غير موجود' });
+    }
+
+    if (customOrder.attachmentUrl) {
+      await deleteSupabaseFileByUrl(customOrder.attachmentUrl);
+    }
+
+    await prisma.customOrder.delete({ where: { id: customOrderId } });
+    return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'Server error' });
   }
