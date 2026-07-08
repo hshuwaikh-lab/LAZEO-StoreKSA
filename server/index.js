@@ -1448,6 +1448,42 @@ app.put('/api/admin/custom-orders/:id/quote', authenticateToken, requireAdmin, a
   }
 });
 
+app.put('/api/admin/custom-orders/:id/return-to-client', authenticateToken, requireAdmin, async (req, res) => {
+  const customOrderId = parseInt(req.params.id, 10);
+
+  if (Number.isNaN(customOrderId)) {
+    return res.status(400).json({ error: 'معرّف الطلب غير صالح' });
+  }
+
+  try {
+    const customOrder = await prisma.customOrder.findUnique({
+      where: { id: customOrderId },
+      select: { id: true, status: true, priceQuote: true }
+    });
+
+    if (!customOrder) {
+      return res.status(404).json({ error: 'الطلب غير موجود' });
+    }
+
+    if (customOrder.priceQuote == null) {
+      return res.status(400).json({ error: 'لا يمكن إرجاع طلب غير مُسعّر للعميل' });
+    }
+
+    if (customOrder.status !== 'accepted') {
+      return res.status(400).json({ error: 'يمكن إرجاع الطلبات المقبولة فقط' });
+    }
+
+    const updated = await prisma.customOrder.update({
+      where: { id: customOrderId },
+      data: { status: 'priced' }
+    });
+
+    return res.json(updated);
+  } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 app.get('/api/admin/shipping', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const shippingMethods = await prisma.shippingMethod.findMany();

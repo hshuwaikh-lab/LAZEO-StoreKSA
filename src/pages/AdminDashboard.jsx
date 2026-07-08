@@ -160,6 +160,66 @@ const AdminDashboard = () => {
     }
   };
 
+  const openCustomOrderDetails = (customOrder) => {
+    const details = [
+      `رقم الطلب: #${customOrder.id}`,
+      `العميل: ${customOrder.user?.username || '-'}`,
+      `البريد الإلكتروني: ${customOrder.user?.email || '-'}`,
+      `المادة: ${customOrder.material || '-'}`,
+      `الحالة: ${customOrder.status || '-'}`,
+      `السعر: ${customOrder.priceQuote != null ? `${customOrder.priceQuote} ر.س` : 'بانتظار التسعير'}`,
+      `تاريخ الإنشاء: ${customOrder.createdAt ? new Date(customOrder.createdAt).toLocaleString() : '-'}`,
+      '',
+      'تفاصيل الطلب:',
+      customOrder.details || '-',
+    ].join('\n');
+
+    setDialog({
+      open: true,
+      title: `تفاصيل الطلب #${customOrder.id}`,
+      content: details,
+      mode: 'text',
+      confirmLabel: '',
+      onConfirm: null,
+    });
+    setDialogText(details);
+  };
+
+  const handleReturnCustomOrderToClient = async (customOrder) => {
+    setDialog({
+      open: true,
+      title: 'إرجاع الطلب للعميل',
+      content: `هل تريد إعادة الطلب #${customOrder.id} للعميل؟ سيعود إلى حالة "بانتظار موافقة العميل".`,
+      mode: 'confirm',
+      confirmLabel: 'إرجاع',
+      onConfirm: async () => {
+        const token = localStorage.getItem('token');
+        try {
+          const res = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_CUSTOM_ORDER_RETURN_TO_CLIENT(customOrder.id)), {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+
+          if (res.ok) {
+            setFeedback({ type: 'success', title: 'تم إرجاع الطلب', message: 'تمت إعادة الطلب للعميل بنجاح.' });
+            fetchData();
+            return;
+          }
+
+          const errorData = await res.json().catch(() => ({}));
+          setFeedback({
+            type: 'error',
+            title: 'تعذر إرجاع الطلب',
+            message: errorData.error || 'حدث خطأ أثناء إرجاع الطلب للعميل.'
+          });
+        } catch (error) {
+          console.error(error);
+          setFeedback({ type: 'error', title: 'تعذر إرجاع الطلب', message: 'حدث خطأ أثناء الاتصال بالخادم.' });
+        }
+      }
+    });
+  };
+
   const handleOrderStatusUpdate = async (id, status) => {
     const token = localStorage.getItem('token');
     try {
@@ -1937,12 +1997,24 @@ const AdminDashboard = () => {
                       <td>{co.status}</td>
                       <td>{co.priceQuote || 'بانتظار التسعير'}</td>
                       <td>
-                        {!co.priceQuote && (
-                          <div style={{ display: 'flex', gap: '5px' }}>
+                        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                          <button className="btn-secondary" style={{ padding: '5px 10px' }} onClick={() => openCustomOrderDetails(co)}>تفاصيل</button>
+                          {!co.priceQuote && (
                             <input id={`quote-${co.id}`} type="number" placeholder="السعر" style={{ width: '80px', padding: '5px' }} />
+                          )}
+                          {!co.priceQuote && (
                             <button className="btn-primary" style={{ padding: '5px 10px' }} onClick={() => handleQuoteUpdate(co.id, document.getElementById(`quote-${co.id}`).value)}>تسعير</button>
-                          </div>
-                        )}
+                          )}
+                          {co.status === 'accepted' && (
+                            <button
+                              className="btn-solid"
+                              style={{ padding: '5px 10px', background: '#b91c1c', border: 'none', color: 'white' }}
+                              onClick={() => handleReturnCustomOrderToClient(co)}
+                            >
+                              إرجاع للعميل
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
