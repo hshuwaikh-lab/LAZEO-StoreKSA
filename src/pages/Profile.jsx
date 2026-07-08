@@ -21,6 +21,16 @@ const emptyLocationForm = {
   isDefault: false
 };
 
+const RECEIVER_PROFILE_STORAGE_KEY = 'lazeo_receiver_profile';
+const emptyReceiverProfile = {
+  receiverName: '',
+  receiverPhone: '',
+  receiverCity: '',
+  receiverDistrict: '',
+  receiverStreet: '',
+  receiverNearbyLandmark: ''
+};
+
 const Profile = () => {
   useTranslation();
   const navigate = useNavigate();
@@ -34,6 +44,7 @@ const Profile = () => {
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '' });
   const [orders, setOrders] = useState([]);
   const [customOrders, setCustomOrders] = useState([]);
+  const [receiverProfile, setReceiverProfile] = useState(emptyReceiverProfile);
   const [loading, setLoading] = useState(true);
   const [printingOrder, setPrintingOrder] = useState(null);
   const [processingCustomOrderId, setProcessingCustomOrderId] = useState(null);
@@ -84,6 +95,25 @@ const Profile = () => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    try {
+      const storedProfile = localStorage.getItem(RECEIVER_PROFILE_STORAGE_KEY);
+      if (!storedProfile) return;
+
+      const parsed = JSON.parse(storedProfile);
+      setReceiverProfile({
+        receiverName: String(parsed?.receiverName || ''),
+        receiverPhone: String(parsed?.receiverPhone || ''),
+        receiverCity: String(parsed?.receiverCity || ''),
+        receiverDistrict: String(parsed?.receiverDistrict || ''),
+        receiverStreet: String(parsed?.receiverStreet || ''),
+        receiverNearbyLandmark: String(parsed?.receiverNearbyLandmark || '')
+      });
+    } catch {
+      setReceiverProfile(emptyReceiverProfile);
+    }
+  }, []);
+
   const fetchData = async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
@@ -102,6 +132,15 @@ const Profile = () => {
         const profileData = await profileRes.json();
         setProfile(profileData);
         setSavedLocations(profileData.savedLocations || []);
+        setReceiverProfile((prev) => ({
+          ...prev,
+          receiverName: prev.receiverName || profileData.username || '',
+          receiverPhone: prev.receiverPhone || profileData.phone || '',
+          receiverCity: prev.receiverCity || '',
+          receiverDistrict: prev.receiverDistrict || '',
+          receiverStreet: prev.receiverStreet || '',
+          receiverNearbyLandmark: prev.receiverNearbyLandmark || ''
+        }));
       }
       if (ordersRes.ok) setOrders(await ordersRes.json());
       if (customRes.ok) {
@@ -282,6 +321,15 @@ const Profile = () => {
         body: JSON.stringify({ username: profile.username, phone: profile.phone, address: profile.address, receiveWhatsApp: profile.receiveWhatsApp })
       });
       if (res.ok) {
+        localStorage.setItem(RECEIVER_PROFILE_STORAGE_KEY, JSON.stringify({
+          receiverName: receiverProfile.receiverName.trim(),
+          receiverPhone: receiverProfile.receiverPhone.trim(),
+          receiverCity: receiverProfile.receiverCity.trim(),
+          receiverDistrict: receiverProfile.receiverDistrict.trim(),
+          receiverStreet: receiverProfile.receiverStreet.trim(),
+          receiverNearbyLandmark: receiverProfile.receiverNearbyLandmark.trim()
+        }));
+
         setFeedback({ type: 'success', title: 'تم التحديث', message: 'تم تحديث البيانات الشخصية بنجاح.' });
         if (updateUser) {
           updateUser({ username: profile.username });
@@ -471,6 +519,53 @@ const Profile = () => {
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <input type="checkbox" id="whatsappToggle" checked={profile.receiveWhatsApp} onChange={(e) => setProfile({...profile, receiveWhatsApp: e.target.checked})} />
               <label htmlFor="whatsappToggle">استلام رسائل الواتساب من المتجر</label>
+            </div>
+
+            <div style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <strong>بيانات المستلم الافتراضية</strong>
+              <span style={{ color: 'var(--text-light)', fontSize: '0.9rem' }}>سيتم استخدامها تلقائيًا في السلة وصفحة الدفع ويمكن تعديلها لاحقًا.</span>
+              <input
+                type="text"
+                placeholder="اسم المستلم"
+                value={receiverProfile.receiverName}
+                onChange={(e) => setReceiverProfile((prev) => ({ ...prev, receiverName: e.target.value }))}
+                style={{ padding: '10px', borderRadius: '6px' }}
+              />
+              <input
+                type="text"
+                placeholder="الجوال"
+                value={receiverProfile.receiverPhone}
+                onChange={(e) => setReceiverProfile((prev) => ({ ...prev, receiverPhone: e.target.value }))}
+                style={{ padding: '10px', borderRadius: '6px' }}
+              />
+              <input
+                type="text"
+                placeholder="المدينة"
+                value={receiverProfile.receiverCity}
+                onChange={(e) => setReceiverProfile((prev) => ({ ...prev, receiverCity: e.target.value }))}
+                style={{ padding: '10px', borderRadius: '6px' }}
+              />
+              <input
+                type="text"
+                placeholder="الحي"
+                value={receiverProfile.receiverDistrict}
+                onChange={(e) => setReceiverProfile((prev) => ({ ...prev, receiverDistrict: e.target.value }))}
+                style={{ padding: '10px', borderRadius: '6px' }}
+              />
+              <input
+                type="text"
+                placeholder="الشارع"
+                value={receiverProfile.receiverStreet}
+                onChange={(e) => setReceiverProfile((prev) => ({ ...prev, receiverStreet: e.target.value }))}
+                style={{ padding: '10px', borderRadius: '6px' }}
+              />
+              <input
+                type="text"
+                placeholder="معلم قريب"
+                value={receiverProfile.receiverNearbyLandmark}
+                onChange={(e) => setReceiverProfile((prev) => ({ ...prev, receiverNearbyLandmark: e.target.value }))}
+                style={{ padding: '10px', borderRadius: '6px' }}
+              />
             </div>
             <button type="submit" className="btn-primary">حفظ التعديلات</button>
           </form>

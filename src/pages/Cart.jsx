@@ -11,6 +11,28 @@ import { getOfferLabel } from '../utils/offers';
 import { normalizeCouponCode } from '../utils/coupons';
 import './Cart.css';
 
+const RECEIVER_PROFILE_STORAGE_KEY = 'lazeo_receiver_profile';
+
+const getStoredReceiverProfile = () => {
+  try {
+    const stored = localStorage.getItem(RECEIVER_PROFILE_STORAGE_KEY);
+    if (!stored) {
+      return null;
+    }
+    const parsed = JSON.parse(stored);
+    return {
+      receiverName: String(parsed?.receiverName || ''),
+      receiverPhone: String(parsed?.receiverPhone || ''),
+      receiverCity: String(parsed?.receiverCity || ''),
+      receiverDistrict: String(parsed?.receiverDistrict || ''),
+      receiverStreet: String(parsed?.receiverStreet || ''),
+      receiverNearbyLandmark: String(parsed?.receiverNearbyLandmark || '')
+    };
+  } catch {
+    return null;
+  }
+};
+
 const PICKUP_SHIPPING_METHOD = {
   id: 'pickup',
   type: 'pickup',
@@ -39,6 +61,7 @@ const Cart = () => {
   } = useCart();
   const { user } = useContext(AuthContext);
   const isAr = i18n.language === 'ar';
+  const storedReceiverProfile = getStoredReceiverProfile();
 
   const [shippingMode, setShippingMode] = useState(shippingMethod?.type || 'pickup');
   const [nationalAddress, setNationalAddress] = useState(shippingMethod?.nationalAddress || user?.address || '');
@@ -50,12 +73,12 @@ const Cart = () => {
       : ''
   );
   const [receiverDetails, setReceiverDetails] = useState({
-    receiverName: shippingMethod?.receiverName || '',
-    receiverPhone: shippingMethod?.receiverPhone || '',
-    receiverCity: shippingMethod?.receiverCity || '',
-    receiverDistrict: shippingMethod?.receiverDistrict || '',
-    receiverStreet: shippingMethod?.receiverStreet || '',
-    receiverNearbyLandmark: shippingMethod?.receiverNearbyLandmark || ''
+    receiverName: shippingMethod?.receiverName || storedReceiverProfile?.receiverName || user?.username || '',
+    receiverPhone: shippingMethod?.receiverPhone || storedReceiverProfile?.receiverPhone || user?.phone || '',
+    receiverCity: shippingMethod?.receiverCity || storedReceiverProfile?.receiverCity || '',
+    receiverDistrict: shippingMethod?.receiverDistrict || storedReceiverProfile?.receiverDistrict || '',
+    receiverStreet: shippingMethod?.receiverStreet || storedReceiverProfile?.receiverStreet || '',
+    receiverNearbyLandmark: shippingMethod?.receiverNearbyLandmark || storedReceiverProfile?.receiverNearbyLandmark || ''
   });
   const [savedLocations, setSavedLocations] = useState([]);
   const [selectedSavedLocationId, setSelectedSavedLocationId] = useState('');
@@ -585,7 +608,7 @@ const Cart = () => {
                   checked={shippingMode === 'delivery'}
                   onChange={() => handleShippingModeChange('delivery')}
                 />
-                <span>شحن (حسب العنوان الوطني)</span>
+                <span>شحن</span>
               </label>
 
               {shippingMode === 'delivery' && (

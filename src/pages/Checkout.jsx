@@ -9,6 +9,28 @@ import ActionBanner from '../components/ActionBanner';
 import { decorateProductPricing } from '../utils/offers';
 import LocationPickerMap from '../components/LocationPickerMap';
 
+const RECEIVER_PROFILE_STORAGE_KEY = 'lazeo_receiver_profile';
+
+const getStoredReceiverProfile = () => {
+  try {
+    const stored = localStorage.getItem(RECEIVER_PROFILE_STORAGE_KEY);
+    if (!stored) {
+      return null;
+    }
+    const parsed = JSON.parse(stored);
+    return {
+      receiverName: String(parsed?.receiverName || ''),
+      receiverPhone: String(parsed?.receiverPhone || ''),
+      receiverCity: String(parsed?.receiverCity || ''),
+      receiverDistrict: String(parsed?.receiverDistrict || ''),
+      receiverStreet: String(parsed?.receiverStreet || ''),
+      receiverNearbyLandmark: String(parsed?.receiverNearbyLandmark || '')
+    };
+  } catch {
+    return null;
+  }
+};
+
 const PICKUP_SHIPPING_METHOD = {
   id: 'pickup',
   type: 'pickup',
@@ -35,6 +57,7 @@ const Checkout = () => {
     clearCart,
   } = useCart();
   const { user } = useContext(AuthContext);
+  const storedReceiverProfile = getStoredReceiverProfile();
 
   const customOrder = location.state?.customOrder || null;
   const isCustomOrderPayment = Boolean(customOrder);
@@ -59,18 +82,19 @@ const Checkout = () => {
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState(null);
   const [receiverDetails, setReceiverDetails] = useState({
-    receiverName: '',
-    receiverPhone: '',
-    receiverCity: '',
-    receiverDistrict: '',
-    receiverStreet: '',
-    receiverNearbyLandmark: ''
+    receiverName: storedReceiverProfile?.receiverName || user?.username || '',
+    receiverPhone: storedReceiverProfile?.receiverPhone || user?.phone || '',
+    receiverCity: storedReceiverProfile?.receiverCity || '',
+    receiverDistrict: storedReceiverProfile?.receiverDistrict || '',
+    receiverStreet: storedReceiverProfile?.receiverStreet || '',
+    receiverNearbyLandmark: storedReceiverProfile?.receiverNearbyLandmark || ''
   });
 
   const normalizedShippingProvider = String(shippingMethod?.shippingProvider || '').toLowerCase();
   const requiresCarrierReceiverDetails = !isCustomOrderPayment && shippingMethod?.type === 'delivery';
   const requiresCustomOrderShippingDetails = isCustomOrderPayment && shippingMode === 'delivery';
   const requiresReceiverDetails = requiresCarrierReceiverDetails || requiresCustomOrderShippingDetails;
+  const shouldShowReceiverDetailsForm = requiresCustomOrderShippingDetails;
   const shippingProviderLabel = normalizedShippingProvider === 'smsa' ? 'سمسا' : normalizedShippingProvider === 'aramex' ? 'أرامكس' : 'شحن وطني';
   const shippingCostInteger = Math.round(Number(shippingCost || 0));
   const customShippingCost = Number(selectedCustomShipping?.price || 0);
@@ -332,9 +356,16 @@ const Checkout = () => {
       return;
     }
 
-    if (requiresReceiverDetails) {
+    if (requiresCustomOrderShippingDetails) {
       if (!receiverDetails.receiverName.trim() || !receiverDetails.receiverPhone.trim() || !receiverDetails.receiverCity.trim() || !receiverDetails.receiverDistrict.trim() || !receiverDetails.receiverStreet.trim() || !receiverDetails.receiverNearbyLandmark.trim()) {
         setFeedback({ type: 'error', title: 'بيانات الشحن مطلوبة', message: 'أكمل اسم المستلم والجوال والمدينة والحي والشارع والمعلم القريب قبل إرسال الطلب.' });
+        return;
+      }
+    }
+
+    if (requiresCarrierReceiverDetails) {
+      if (!shippingMethod?.receiverName || !shippingMethod?.receiverPhone || !shippingMethod?.receiverCity || !shippingMethod?.receiverDistrict || !shippingMethod?.receiverStreet || !shippingMethod?.receiverNearbyLandmark) {
+        setFeedback({ type: 'error', title: 'بيانات الشحن غير مكتملة', message: 'أكمل بيانات المستلم من صفحة السلة أولًا ثم أعد المحاولة.' });
         return;
       }
     }
@@ -419,12 +450,12 @@ const Checkout = () => {
           shippingProvider: isCustomOrderPayment
             ? (selectedCustomShipping?.type === 'pickup' ? 'pickup' : (selectedCustomShipping?.shippingProvider || String(selectedCustomShipping?.name || '').toLowerCase() || 'custom-order'))
             : (shippingMethod?.shippingProvider || null),
-          receiverName: receiverDetails.receiverName.trim() || null,
-          receiverPhone: receiverDetails.receiverPhone.trim() || null,
-          receiverCity: receiverDetails.receiverCity.trim() || null,
-          receiverDistrict: receiverDetails.receiverDistrict.trim() || null,
-          receiverStreet: receiverDetails.receiverStreet.trim() || null,
-          receiverNearbyLandmark: receiverDetails.receiverNearbyLandmark.trim() || null,
+          receiverName: isCustomOrderPayment ? (receiverDetails.receiverName.trim() || null) : (shippingMethod?.receiverName || null),
+          receiverPhone: isCustomOrderPayment ? (receiverDetails.receiverPhone.trim() || null) : (shippingMethod?.receiverPhone || null),
+          receiverCity: isCustomOrderPayment ? (receiverDetails.receiverCity.trim() || null) : (shippingMethod?.receiverCity || null),
+          receiverDistrict: isCustomOrderPayment ? (receiverDetails.receiverDistrict.trim() || null) : (shippingMethod?.receiverDistrict || null),
+          receiverStreet: isCustomOrderPayment ? (receiverDetails.receiverStreet.trim() || null) : (shippingMethod?.receiverStreet || null),
+          receiverNearbyLandmark: isCustomOrderPayment ? (receiverDetails.receiverNearbyLandmark.trim() || null) : (shippingMethod?.receiverNearbyLandmark || null),
           customOrderId: resolvedCustomOrderId
         })
       });
@@ -540,7 +571,7 @@ const Checkout = () => {
                   checked={shippingMode === 'delivery'}
                   onChange={() => handleShippingModeChange('delivery')}
                 />
-                <span>شحن (حسب العنوان الوطني)</span>
+                <span>شحن</span>
               </label>
 
               {shippingMode === 'delivery' && (
@@ -793,7 +824,16 @@ const Checkout = () => {
         {selectedBank && (
           <form onSubmit={handleSubmitOrder} style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '30px' }}>
 
-            {requiresReceiverDetails && (
+            {requiresCarrierReceiverDetails && !isCustomOrderPayment && (
+              <div style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px', background: 'rgba(15,23,42,0.03)' }}>
+                <strong>بيانات المستلم</strong>
+                <div style={{ marginTop: '6px', color: 'var(--text-light)' }}>
+                  تم حفظ بيانات المستلم من صفحة السلة وسيتم استخدامها تلقائيًا لإتمام الطلب.
+                </div>
+              </div>
+            )}
+
+            {shouldShowReceiverDetailsForm && (
               <div style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px', background: 'rgba(15,23,42,0.03)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <strong>{requiresCustomOrderShippingDetails ? 'بيانات الشحن للطلب المخصص' : 'بيانات المستلم للشحن'}</strong>
                 <input
