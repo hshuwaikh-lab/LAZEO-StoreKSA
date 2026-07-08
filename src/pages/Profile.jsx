@@ -42,6 +42,37 @@ const Profile = () => {
   const { updateUser, user } = useContext(AuthContext);
   const { addToCart, cartItems } = useCart();
 
+  const isCustomOrderInCart = (customOrderId) => {
+    return cartItems.some(
+      (item) => item?.isCustomOrder && Number(item?.customOrderId) === Number(customOrderId)
+    );
+  };
+
+  const addCustomOrderToCart = (customOrder) => {
+    if (!customOrder || customOrder.priceQuote == null) {
+      return false;
+    }
+
+    if (isCustomOrderInCart(customOrder.id)) {
+      return false;
+    }
+
+    const customCartId = `custom-order-${customOrder.id}`;
+    addToCart({
+      id: customCartId,
+      nameEn: `Custom Order #${customOrder.id}`,
+      nameAr: `طلب مخصص #${customOrder.id}`,
+      price: Number(customOrder.priceQuote || 0),
+      image: customOrder.attachmentUrl || '/logo.png',
+      isCustomOrder: true,
+      customOrderId: customOrder.id,
+      material: customOrder.material,
+      details: customOrder.details,
+    }, 1, customCartId);
+
+    return true;
+  };
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -66,7 +97,30 @@ const Profile = () => {
         setSavedLocations(profileData.savedLocations || []);
       }
       if (ordersRes.ok) setOrders(await ordersRes.json());
-      if (customRes.ok) setCustomOrders(await customRes.json());
+      if (customRes.ok) {
+        const customOrdersData = await customRes.json();
+        setCustomOrders(customOrdersData);
+
+        const autoAddedCount = (Array.isArray(customOrdersData) ? customOrdersData : []).reduce((count, customOrder) => {
+          const canAutoAdd =
+            (customOrder?.status === 'priced' || customOrder?.status === 'accepted')
+            && customOrder?.priceQuote != null;
+
+          if (!canAutoAdd) {
+            return count;
+          }
+
+          return count + (addCustomOrderToCart(customOrder) ? 1 : 0);
+        }, 0);
+
+        if (autoAddedCount > 0) {
+          setFeedback({
+            type: 'success',
+            title: 'تمت الإضافة تلقائيًا',
+            message: `تمت إضافة ${autoAddedCount} طلب/طلبات مخصصة مسعّرة إلى السلة.`
+          });
+        }
+      }
     } catch (error) {
       console.error('Error fetching profile data:', error);
     } finally {
@@ -298,32 +352,15 @@ const Profile = () => {
         throw new Error(errorData.error || 'تعذر الموافقة على السعر');
       }
 
-      const customCartId = `custom-order-${customOrder.id}`;
-      const alreadyInCart = cartItems.some(
-        (item) => item?.isCustomOrder && Number(item?.customOrderId) === Number(customOrder.id)
-      );
-
-      if (!alreadyInCart) {
-        addToCart({
-        id: `custom-order-${customOrder.id}`,
-        nameEn: `Custom Order #${customOrder.id}`,
-        nameAr: `طلب مخصص #${customOrder.id}`,
-        price: Number(customOrder.priceQuote || 0),
-        image: customOrder.attachmentUrl || '/logo.png',
-        isCustomOrder: true,
-        customOrderId: customOrder.id,
-        material: customOrder.material,
-        details: customOrder.details,
-      }, 1, customCartId);
-      }
+      const addedToCart = addCustomOrderToCart(customOrder);
 
       await fetchData();
       setFeedback({
         type: 'success',
         title: 'تمت الموافقة',
-        message: alreadyInCart
-          ? 'هذا الطلب المخصص موجود بالفعل في السلة.'
-          : 'تمت إضافة الطلب المخصص إلى السلة بنجاح.'
+        message: addedToCart
+          ? 'تمت إضافة الطلب المخصص إلى السلة بنجاح.'
+          : 'هذا الطلب المخصص موجود بالفعل في السلة.'
       });
       navigate('/cart');
     } catch (error) {
@@ -332,6 +369,18 @@ const Profile = () => {
     } finally {
       setProcessingCustomOrderId(null);
     }
+  };
+
+  const handleGoToCartWithCustomOrder = (customOrder) => {
+    const addedToCart = addCustomOrderToCart(customOrder);
+    setFeedback({
+      type: 'success',
+      title: 'تم التوجيه للسلة',
+      message: addedToCart
+        ? 'تمت إضافة الطلب المخصص إلى السلة.'
+        : 'هذا الطلب المخصص موجود بالفعل في السلة.'
+    });
+    navigate('/cart');
   };
 
   if (loading) return <div className="container section text-center">جاري التحميل...</div>;
@@ -600,7 +649,7 @@ const Profile = () => {
                         </span>
                       </td>
                       <td style={{ padding: '10px' }}>
-                        {co.priceQuote && co.status === 'priced' && (
+                        {co.priceQuote && co.status === 'priced' && !isCustomOrderInCart(co.id) && (
                           <button
                             type="button"
                             className="btn-primary"
@@ -610,14 +659,13 @@ const Profile = () => {
                             {processingCustomOrderId === co.id ? 'جاري...' : 'موافقة وإضافة للسلة'}
                           </button>
                         )}
-                        {co.status === 'accepted' && (
+                        {co.priceQuote && isCustomOrderInCart(co.id) && (
                           <button
                             type="button"
                             className="btn-secondary"
-                            onClick={() => handleAcceptCustomOrder(co)}
-                            disabled={processingCustomOrderId === co.id}
+                            onClick={() => handleGoToCartWithCustomOrder(co)}
                           >
-                            {processingCustomOrderId === co.id ? 'جاري...' : 'إضافة للسلة'}
+                            الذهاب للسلة
                           </button>
                         )}
                       </td>
