@@ -70,6 +70,7 @@ const AdminDashboard = () => {
   const shippingImportInputRef = useRef(null);
   const banksImportInputRef = useRef(null);
   const productsImportInputRef = useRef(null);
+  const productsImportImagesInputRef = useRef(null);
   const productImageInputRef = useRef(null);
   const sessionExpiredRef = useRef(false);
 
@@ -1097,6 +1098,80 @@ const AdminDashboard = () => {
       return;
     }
 
+    const importImageFilesByName = new Map();
+    const importImageFilesByStem = new Map();
+    const importImageFilesByCanonical = new Map();
+    const uploadedImportImageCache = new Map();
+
+    const toLookupName = (value) => String(value || '').trim().toLowerCase();
+    const toFileName = (value) => String(value || '').split(/[\\/]/).pop()?.trim() || '';
+    const removeFileExtension = (value) => String(value || '').replace(/\.[^.]+$/, '');
+    const toCanonicalFileToken = (value) => toLookupName(removeFileExtension(value)).replace(/[\s._-]+/g, '');
+    const isRemoteImageReference = (value) => /^(https?:\/\/|data:image\/)/i.test(String(value || '').trim());
+
+    for (const imageFile of productsImportImageFiles) {
+      const rawName = String(imageFile?.name || '').trim();
+      const normalizedName = toLookupName(rawName);
+      const normalizedStem = toLookupName(removeFileExtension(rawName));
+
+      if (normalizedName && !importImageFilesByName.has(normalizedName)) {
+        importImageFilesByName.set(normalizedName, imageFile);
+      }
+
+      if (normalizedStem && !importImageFilesByStem.has(normalizedStem)) {
+        importImageFilesByStem.set(normalizedStem, imageFile);
+      }
+
+      const canonicalName = toCanonicalFileToken(rawName);
+      if (canonicalName && !importImageFilesByCanonical.has(canonicalName)) {
+        importImageFilesByCanonical.set(canonicalName, imageFile);
+      }
+    }
+
+    const uploadImportImageFile = async (imageFile) => {
+      const cacheKey = `${imageFile.name}-${imageFile.size}-${imageFile.lastModified}`;
+      const cached = uploadedImportImageCache.get(cacheKey);
+      if (cached) return cached;
+
+      const uploadData = await uploadFileDirect({ token, file: imageFile, applyWatermark: productImageApplyWatermark });
+      uploadedImportImageCache.set(cacheKey, uploadData.url);
+      return uploadData.url;
+    };
+
+    const resolveImportedImageReferences = async (imageCellValue) => {
+      const candidates = parseProductImageUrls(imageCellValue);
+      const resolvedUrls = [];
+      const missingReferences = [];
+
+      for (const candidate of candidates) {
+        if (isRemoteImageReference(candidate)) {
+          resolvedUrls.push(candidate);
+          continue;
+        }
+
+        const fileName = toFileName(candidate);
+        const normalizedFileName = toLookupName(fileName);
+        const normalizedStem = toLookupName(removeFileExtension(fileName));
+        const canonicalToken = toCanonicalFileToken(fileName);
+        const matchedFile = importImageFilesByName.get(normalizedFileName)
+          || importImageFilesByStem.get(normalizedStem)
+          || importImageFilesByCanonical.get(canonicalToken);
+
+        if (!matchedFile) {
+          missingReferences.push(candidate);
+          continue;
+        }
+
+        const uploadedUrl = await uploadImportImageFile(matchedFile);
+        resolvedUrls.push(uploadedUrl);
+      }
+
+      return {
+        urls: Array.from(new Set(resolvedUrls)),
+        missingReferences
+      };
+    };
+
     const normalizeProduct = (item) => {
       const nameAr = String(item?.nameAr || '').trim();
       const nameEn = String(item?.nameEn || '').trim();
@@ -1187,6 +1262,8 @@ const AdminDashboard = () => {
     };
 
     try {
+      setLastMissingImageDetails([]);
+
       const workbook = new ExcelJS.Workbook();
       const arrayBuffer = await file.arrayBuffer();
       await workbook.xlsx.load(arrayBuffer);
@@ -1233,6 +1310,7 @@ const AdminDashboard = () => {
         const row = sheet.getRow(rowNumber);
 
         const item = {
+          __rowNumber: rowNumber,
           id: columnIndexes.id ? toText(row.getCell(columnIndexes.id).value).trim() : '',
           nameAr: columnIndexes.nameAr ? toText(row.getCell(columnIndexes.nameAr).value).trim() : '',
           nameEn: columnIndexes.nameEn ? toText(row.getCell(columnIndexes.nameEn).value).trim() : '',
@@ -1261,12 +1339,40 @@ const AdminDashboard = () => {
       let created = 0;
       let updated = 0;
       let skipped = 0;
+      let missingImageRows = 0;
+      let importedWithMissingImages = 0;
+      const missingImageDetails = [];
 
       for (const item of items) {
         const normalized = normalizeProduct(item);
         if (!normalized) {
           skipped += 1;
           continue;
+        }
+
+        let resolvedImage;
+        try {
+          resolvedImage = await resolveImportedImageReferences(normalized.image);
+        } catch {
+          skipped += 1;
+          continue;
+        }
+
+        if (resolvedImage.missingReferences.length) {
+          missingImageRows += 1;
+          missingImageDetails.push({
+            rowNumber: item.__rowNumber,
+            nameAr: normalized.nameAr,
+            nameEn: normalized.nameEn,
+            refs: resolvedImage.missingReferences
+          });
+
+          if (importSkipRowsWithMissingImages) {
+            skipped += 1;
+            continue;
+          }
+
+          importedWithMissingImages += 1;
         }
 
         const parsedId = Number(item?.id);
@@ -1276,13 +1382,18 @@ const AdminDashboard = () => {
           ? API_ENDPOINTS.ADMIN_PRODUCTS_DETAIL(parsedId)
           : API_ENDPOINTS.ADMIN_PRODUCTS;
 
+        const payload = {
+          ...normalized,
+          image: serializeProductImageUrls(resolvedImage.urls)
+        };
+
         const res = await fetch(buildApiUrl(endpoint), {
           method,
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(normalized)
+          body: JSON.stringify(payload)
         });
 
         if (res.ok) {
@@ -1294,7 +1405,27 @@ const AdminDashboard = () => {
       }
 
       await fetchData();
-      setFeedback({ type: 'success', title: 'تم استيراد المنتجات', message: `من Excel - مضاف: ${created} | محدث: ${updated} | متجاوز: ${skipped}` });
+      if (missingImageDetails.length) {
+        setLastMissingImageDetails(missingImageDetails);
+        downloadMissingImagesCsv(missingImageDetails);
+      } else {
+        setLastMissingImageDetails([]);
+      }
+
+      const missingImageRowsText = missingImageRows ? ` | صور غير مطابقة: ${missingImageRows}` : '';
+      const importedWithMissingImagesText = importedWithMissingImages ? ` | مستورد بدون بعض الصور: ${importedWithMissingImages}` : '';
+      const missingImagePreview = missingImageDetails
+        .slice(0, 5)
+        .map((item) => `سطر ${item.rowNumber}: ${item.refs.join(', ')}`)
+        .join(' | ');
+      const missingImagePreviewText = missingImagePreview ? ` | التفاصيل: ${missingImagePreview}` : '';
+
+      setFeedback({ type: 'success', title: 'تم استيراد المنتجات', message: `من Excel - مضاف: ${created} | محدث: ${updated} | متجاوز: ${skipped}${missingImageRowsText}${importedWithMissingImagesText}${missingImagePreviewText}` });
+
+      if (productsImportImagesInputRef.current) {
+        productsImportImagesInputRef.current.value = '';
+      }
+      setProductsImportImageFiles([]);
     } catch (error) {
       setFeedback({ type: 'error', title: 'فشل استيراد المنتجات', message: error.message || 'فشل استيراد بيانات Excel للمنتجات.' });
     }
@@ -1421,11 +1552,56 @@ const AdminDashboard = () => {
 
   const [newProduct, setNewProduct] = useState(createEmptyProductForm());
   const [productImageFiles, setProductImageFiles] = useState([]);
+  const [productsImportImageFiles, setProductsImportImageFiles] = useState([]);
+  const [importSkipRowsWithMissingImages, setImportSkipRowsWithMissingImages] = useState(true);
+  const [lastMissingImageDetails, setLastMissingImageDetails] = useState([]);
   const [productImagePreviewUrls, setProductImagePreviewUrls] = useState([]);
   const [productImageApplyWatermark, setProductImageApplyWatermark] = useState(true);
   const [editingProductId, setEditingProductId] = useState(null);
   const [newCoupon, setNewCoupon] = useState(createEmptyCouponForm());
   const [editingCouponId, setEditingCouponId] = useState(null);
+
+  const downloadMissingImagesCsv = useCallback((rows) => {
+    if (!rows.length) return;
+
+    const escapeCsvValue = (value) => {
+      const text = String(value ?? '');
+      if (/[",\n]/.test(text)) {
+        return `"${text.replace(/"/g, '""')}"`;
+      }
+      return text;
+    };
+
+    const headers = ['rowNumber', 'nameAr', 'nameEn', 'missingImageRefs'];
+    const csvLines = [headers.join(',')];
+
+    for (const row of rows) {
+      const lineValues = [
+        row.rowNumber,
+        row.nameAr,
+        row.nameEn,
+        row.refs.join(' | ')
+      ].map(escapeCsvValue);
+
+      csvLines.push(lineValues.join(','));
+    }
+
+    const csvContent = `\uFEFF${csvLines.join('\n')}`;
+    const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csvUrl = URL.createObjectURL(csvBlob);
+    const link = document.createElement('a');
+
+    link.href = csvUrl;
+    link.download = `missing-product-images-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(csvUrl);
+  }, []);
+
+  const handleDownloadLastMissingImagesReport = useCallback(() => {
+    downloadMissingImagesCsv(lastMissingImageDetails);
+  }, [downloadMissingImagesCsv, lastMissingImageDetails]);
 
   useEffect(() => {
     if (productImageFiles.length) {
@@ -1920,12 +2096,68 @@ const AdminDashboard = () => {
                   >
                     استيراد المنتجات (Excel)
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => productsImportImagesInputRef.current?.click()}
+                    style={{ background: '#0f766e', color: 'white', border: 'none', borderRadius: '8px', padding: '9px 14px', cursor: 'pointer', fontWeight: 700 }}
+                  >
+                    اختيار صور الاستيراد
+                  </button>
+                  {productsImportImageFiles.length ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProductsImportImageFiles([]);
+                        if (productsImportImagesInputRef.current) {
+                          productsImportImagesInputRef.current.value = '';
+                        }
+                      }}
+                      style={{ background: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', padding: '9px 14px', cursor: 'pointer', fontWeight: 700 }}
+                    >
+                      مسح صور الاستيراد ({productsImportImageFiles.length})
+                    </button>
+                  ) : null}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#7c2d12', fontSize: '0.88rem', fontWeight: 700 }}>
+                    <input
+                      type="checkbox"
+                      checked={importSkipRowsWithMissingImages}
+                      onChange={(e) => setImportSkipRowsWithMissingImages(e.target.checked)}
+                    />
+                    تجاوز الصف إذا صورة غير مطابقة
+                  </label>
+                  {lastMissingImageDetails.length ? (
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={handleDownloadLastMissingImagesReport}
+                        style={{ background: '#1e3a8a', color: 'white', border: 'none', borderRadius: '8px', padding: '9px 14px', cursor: 'pointer', fontWeight: 700 }}
+                      >
+                        تنزيل آخر تقرير الصور غير المطابقة ({lastMissingImageDetails.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLastMissingImageDetails([])}
+                        style={{ background: '#475569', color: 'white', border: 'none', borderRadius: '8px', padding: '9px 14px', cursor: 'pointer', fontWeight: 700 }}
+                      >
+                        مسح آخر تقرير
+                      </button>
+                    </div>
+                  ) : null}
                   <span style={{ color: '#9a3412', fontSize: '0.9rem', fontWeight: 700 }}>خيارات إدارة المنتجات بالجملة</span>
+                  <span style={{ color: '#075985', fontSize: '0.84rem', fontWeight: 700 }}>ضع في Excel اسم ملف الصورة مثل product-1.jpg ثم اختر الصور من جهازك</span>
                   <input
                     ref={productsImportInputRef}
                     type="file"
                     accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     onChange={importProductsFromExcel}
+                    style={{ display: 'none' }}
+                  />
+                  <input
+                    ref={productsImportImagesInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => setProductsImportImageFiles(Array.from(e.target.files || []))}
                     style={{ display: 'none' }}
                   />
                 </div>
@@ -1994,6 +2226,7 @@ const AdminDashboard = () => {
                     <button type="submit" className="btn-primary" style={{ padding: '8px 16px', marginRight: '10px' }}>{editingProductId ? 'تحديث المنتج' : 'إضافة المنتج'}</button>
                     <button type="button" style={{ background: '#0f766e', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', marginRight: '10px', cursor: 'pointer', fontWeight: 700 }} onClick={exportProductsToExcel}>تصدير المنتجات (Excel)</button>
                     <button type="button" style={{ background: '#1d4ed8', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', marginRight: '10px', cursor: 'pointer', fontWeight: 700 }} onClick={() => productsImportInputRef.current?.click()}>استيراد المنتجات (Excel)</button>
+                    <button type="button" style={{ background: '#0f766e', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', marginRight: '10px', cursor: 'pointer', fontWeight: 700 }} onClick={() => productsImportImagesInputRef.current?.click()}>اختيار صور الاستيراد</button>
                     {editingProductId && <button type="button" className="btn-secondary" style={{ padding: '8px 16px' }} onClick={handleCancelEditProduct}>إلغاء</button>}
                   </div>
                 </form>
