@@ -2144,11 +2144,11 @@ const AdminDashboard = () => {
                     </div>
                   ) : null}
                   <span style={{ color: '#9a3412', fontSize: '0.9rem', fontWeight: 700 }}>خيارات إدارة المنتجات بالجملة</span>
-                  <span style={{ color: '#075985', fontSize: '0.84rem', fontWeight: 700 }}>ضع في Excel اسم ملف الصورة مثل product-1.jpg ثم اختر الصور من جهازك</span>
+                  <span style={{ color: '#075985', fontSize: '0.84rem', fontWeight: 700 }}>يدعم الاستيراد ملفات XLSX و XLSM. ضع في Excel اسم ملف الصورة مثل product-1.jpg ثم اختر الصور من جهازك</span>
                   <input
                     ref={productsImportInputRef}
                     type="file"
-                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12"
                     onChange={importProductsFromExcel}
                     style={{ display: 'none' }}
                   />
