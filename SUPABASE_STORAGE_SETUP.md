@@ -2,6 +2,43 @@
 
 This guide configures image/file uploads for the backend endpoint `POST /api/upload`.
 
+## Optional: Google Drive as Storage Provider
+
+You can now use Google Drive as an optional provider from Admin Settings.
+
+### Required backend env vars (server/.env)
+
+```env
+# local | supabase | gdrive
+STORAGE_PROVIDER=local
+
+# Google Drive target folder (required for gdrive mode)
+GOOGLE_DRIVE_FOLDER_ID=your_folder_id_here
+
+# Option A: full JSON as one line (preferred)
+GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+
+# Option B: split credentials
+# GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL=service-account@project.iam.gserviceaccount.com
+# GOOGLE_DRIVE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+```
+
+### Google Drive setup checklist
+
+1. Create a Google Cloud project and enable Google Drive API.
+2. Create a Service Account and generate key JSON.
+3. Create/choose a Drive folder for uploads.
+4. Share that folder with the service account email as Editor.
+5. Put the folder ID in `GOOGLE_DRIVE_FOLDER_ID`.
+6. Set storage provider from Admin Dashboard -> Settings -> Storage Provider.
+
+### Runtime behavior
+
+- `gdrive`: uploads via backend to Google Drive, files made public-read (`anyone`).
+- `supabase`: signed upload + public URL flow.
+- `local`: stored in `/server/uploads`.
+- If selected provider is misconfigured, API falls back to local mode and reports warning in storage health.
+
 ## 1) Create Storage Bucket
 
 1. Open Supabase project dashboard.
@@ -88,8 +125,9 @@ Authorization: Bearer <admin-jwt-token>
 Expected response includes:
 
 - `ok`: storage connectivity status.
-- `provider`: `supabase` or `local`.
-- `mode`: `supabase` or `local-fallback`.
+- `provider`: active runtime provider (`supabase`, `gdrive`, or `local`).
+- `preferredProvider`: selected provider from settings/env.
+- `mode`: provider mode (`supabase`, `gdrive`, `local`, or `local-fallback`).
 - `maxUploadSizeMb`: active upload size limit.
 
 You can also run this check directly from Admin Dashboard -> Settings via the "فحص حالة التخزين" button.

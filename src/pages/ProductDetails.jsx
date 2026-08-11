@@ -6,6 +6,7 @@ import { ArrowRight, ArrowLeft } from 'lucide-react';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { decorateProductPricing, formatOfferEndsAt, getOfferBadgeText, getOfferLabel } from '../utils/offers';
 import { getProductPrimaryImage, parseProductImageUrls } from '../utils/productImages';
+import ProtectedImage from '../components/ProtectedImage';
 import './ProductDetails.css';
 
 const ProductDetails = () => {
@@ -100,7 +101,13 @@ const ProductDetails = () => {
           {pricedProduct.offerActive && <span className="offer-badge product-offer-badge">{getOfferBadgeText(product, isAr)}</span>}
           {activeImage ? (
             <>
-              <img src={activeImage} alt={name} className="product-image" />
+              <ProtectedImage
+                src={activeImage}
+                alt={name}
+                className="product-image"
+                watermarkText="LAZEO PREVIEW"
+                loading="eager"
+              />
               {productImages.length > 1 ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(64px, 1fr))', gap: '8px', marginTop: '12px' }}>
                   {productImages.map((imageUrl, index) => (
@@ -110,7 +117,12 @@ const ProductDetails = () => {
                       onClick={() => setSelectedImageIndex(index)}
                       style={{ border: index === selectedImageIndex ? '2px solid #0f766e' : '1px solid #cbd5e1', borderRadius: '10px', padding: '0', overflow: 'hidden', background: '#fff', cursor: 'pointer' }}
                     >
-                      <img src={imageUrl} alt={`${name} ${index + 1}`} style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', display: 'block' }} />
+                      <ProtectedImage
+                        src={imageUrl}
+                        alt={`${name} ${index + 1}`}
+                        imageStyle={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', display: 'block' }}
+                        watermarkText="LAZEO"
+                      />
                     </button>
                   ))}
                 </div>

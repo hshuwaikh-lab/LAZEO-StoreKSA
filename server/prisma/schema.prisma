@@ -153,5 +153,7 @@ model StoreSettings {
   shippingCarrierThreshold Float?
   shippingCarrierFixedPrice Float?
   shippingCarrierProvider String?
+  storageProvider String?
+  googleDriveFolderId String?
   updatedAt      DateTime @updatedAt
 }

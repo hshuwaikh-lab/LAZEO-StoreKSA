@@ -33,6 +33,32 @@ function App() {
     document.documentElement.lang = i18n.language;
   }, [i18n.language]);
 
+  useEffect(() => {
+    const isProtectedImage = (target) => {
+      return target instanceof HTMLElement && !!target.closest('img[data-protected-image="true"]');
+    };
+
+    const blockContextMenu = (event) => {
+      if (isProtectedImage(event.target)) {
+        event.preventDefault();
+      }
+    };
+
+    const blockDragStart = (event) => {
+      if (isProtectedImage(event.target)) {
+        event.preventDefault();
+      }
+    };
+
+    document.addEventListener('contextmenu', blockContextMenu);
+    document.addEventListener('dragstart', blockDragStart);
+
+    return () => {
+      document.removeEventListener('contextmenu', blockContextMenu);
+      document.removeEventListener('dragstart', blockDragStart);
+    };
+  }, []);
+
   return (
     <AuthProvider>
       <CartProvider>

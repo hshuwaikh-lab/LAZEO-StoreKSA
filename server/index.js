@@ -8,7 +8,9 @@ const { PrismaClient } = require('@prisma/client');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { Readable } = require('stream');
 const sharp = require('sharp');
+const { google } = require('googleapis');
 const { createClient } = require('@supabase/supabase-js');
 
 require('dotenv').config();
@@ -29,6 +31,11 @@ const ENFORCE_HTTPS = isProduction && String(process.env.ENFORCE_HTTPS || 'true'
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'lazeo-uploads';
+const STORAGE_PROVIDER = String(process.env.STORAGE_PROVIDER || '').trim().toLowerCase();
+const GOOGLE_DRIVE_FOLDER_ID = String(process.env.GOOGLE_DRIVE_FOLDER_ID || '').trim();
+const GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON;
+const GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL;
+const GOOGLE_DRIVE_PRIVATE_KEY = process.env.GOOGLE_DRIVE_PRIVATE_KEY;
 const MAX_UPLOAD_SIZE_MB = parseInt(process.env.MAX_UPLOAD_SIZE_MB || '10', 10);
 const GENERAL_RATE_WINDOW_MS = Math.max(parseInt(process.env.GENERAL_RATE_WINDOW_MS || '900000', 10) || 900000, 10000);
 const GENERAL_RATE_MAX_REQUESTS = Math.max(parseInt(process.env.GENERAL_RATE_MAX_REQUESTS || '500', 10) || 500, 50);
@@ -55,6 +62,24 @@ const forgotPasswordAttempts = new Map();
 const supabase = isSupabaseEnabled
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   : null;
+
+const allowedStorageProviders = new Set(['local', 'supabase', 'gdrive']);
+const hasGoogleDriveServiceAccountJson = Boolean(String(GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON || '').trim());
+const hasGoogleDriveCredentials = Boolean(
+  hasGoogleDriveServiceAccountJson ||
+  (String(GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL || '').trim() && String(GOOGLE_DRIVE_PRIVATE_KEY || '').trim())
+);
+
+let googleDriveClient = null;
+
+function normalizeStorageProvider(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (allowedStorageProviders.has(normalized)) {
+    return normalized;
+  }
+
+  return 'local';
+}
 
 const devAllowedOrigins = [
   'http://localhost:5173',
@@ -237,6 +262,219 @@ async function uploadFileToLocal(req, fileName, fileBuffer) {
 
 function isImageUpload(contentType) {
   return String(contentType || '').toLowerCase().startsWith('image/');
+}
+
+async function readStorageSettings() {
+  try {
+    const settings = await prisma.storeSettings.findFirst();
+    return settings || null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function buildGoogleDriveCredentials() {
+  if (hasGoogleDriveServiceAccountJson) {
+    try {
+      const parsed = JSON.parse(GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON);
+      if (parsed && parsed.client_email && parsed.private_key) {
+        return {
+          client_email: parsed.client_email,
+          private_key: String(parsed.private_key).replace(/\\n/g, '\n')
+        };
+      }
+    } catch (error) {
+      console.error('Invalid GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON:', error.message);
+      return null;
+    }
+  }
+
+  const email = String(GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL || '').trim();
+  const privateKey = String(GOOGLE_DRIVE_PRIVATE_KEY || '').trim();
+
+  if (!email || !privateKey) {
+    return null;
+  }
+
+  return {
+    client_email: email,
+    private_key: privateKey.replace(/\\n/g, '\n')
+  };
+}
+
+function getGoogleDriveClient() {
+  if (googleDriveClient) {
+    return googleDriveClient;
+  }
+
+  const credentials = buildGoogleDriveCredentials();
+  if (!credentials?.client_email || !credentials?.private_key) {
+    return null;
+  }
+
+  const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/drive']
+  });
+
+  googleDriveClient = google.drive({ version: 'v3', auth });
+  return googleDriveClient;
+}
+
+function buildGoogleDrivePublicUrl(fileId) {
+  return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(fileId)}`;
+}
+
+function extractGoogleDriveFileId(fileUrl) {
+  if (!fileUrl) return null;
+
+  try {
+    const parsed = new URL(fileUrl);
+    const idFromQuery = parsed.searchParams.get('id') || parsed.searchParams.get('fileId');
+    if (idFromQuery) {
+      return idFromQuery;
+    }
+
+    const filePathMatch = parsed.pathname.match(/\/file\/d\/([^/]+)/i);
+    if (filePathMatch?.[1]) {
+      return filePathMatch[1];
+    }
+
+    if (parsed.hostname.includes('googleusercontent.com')) {
+      const driveMatch = parsed.pathname.match(/\/d\/([^/]+)/i);
+      if (driveMatch?.[1]) {
+        return driveMatch[1];
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function extractLocalUploadPath(fileUrl) {
+  if (!fileUrl) return null;
+
+  try {
+    const parsed = new URL(fileUrl);
+    const marker = '/uploads/';
+    const markerIndex = parsed.pathname.indexOf(marker);
+    if (markerIndex === -1) {
+      return null;
+    }
+
+    const fileName = decodeURIComponent(parsed.pathname.slice(markerIndex + marker.length));
+    if (!fileName) {
+      return null;
+    }
+
+    return path.join(uploadsDir, fileName);
+  } catch {
+    return null;
+  }
+}
+
+async function uploadFileToGoogleDrive({ fileName, fileBuffer, contentType, folderId }) {
+  const drive = getGoogleDriveClient();
+  if (!drive) {
+    throw new Error('Google Drive credentials are not configured');
+  }
+
+  if (!folderId) {
+    throw new Error('Google Drive folder ID is not configured');
+  }
+
+  const createdFile = await drive.files.create({
+    requestBody: {
+      name: fileName,
+      parents: [folderId]
+    },
+    media: {
+      mimeType: contentType || 'application/octet-stream',
+      body: Readable.from(fileBuffer)
+    },
+    fields: 'id,name'
+  });
+
+  const fileId = String(createdFile?.data?.id || '').trim();
+  if (!fileId) {
+    throw new Error('Google Drive did not return file ID');
+  }
+
+  await drive.permissions.create({
+    fileId,
+    requestBody: {
+      role: 'reader',
+      type: 'anyone'
+    }
+  });
+
+  return {
+    fileId,
+    url: buildGoogleDrivePublicUrl(fileId)
+  };
+}
+
+async function resolveStorageRuntimeConfig() {
+  const settings = await readStorageSettings();
+  const preferredProvider = normalizeStorageProvider(settings?.storageProvider || STORAGE_PROVIDER || (isSupabaseEnabled ? 'supabase' : 'local'));
+  const folderIdFromSettings = String(settings?.googleDriveFolderId || '').trim();
+  const resolvedGoogleDriveFolderId = folderIdFromSettings || GOOGLE_DRIVE_FOLDER_ID;
+  const gdriveReady = Boolean(hasGoogleDriveCredentials && resolvedGoogleDriveFolderId);
+
+  if (preferredProvider === 'gdrive' && gdriveReady) {
+    return {
+      provider: 'gdrive',
+      settings,
+      googleDriveFolderId: resolvedGoogleDriveFolderId,
+      gdriveReady,
+      supabaseReady: isSupabaseEnabled,
+      warning: null
+    };
+  }
+
+  if (preferredProvider === 'supabase' && isSupabaseEnabled) {
+    return {
+      provider: 'supabase',
+      settings,
+      googleDriveFolderId: resolvedGoogleDriveFolderId,
+      gdriveReady,
+      supabaseReady: true,
+      warning: null
+    };
+  }
+
+  if (preferredProvider === 'gdrive' && !gdriveReady) {
+    return {
+      provider: 'local',
+      settings,
+      googleDriveFolderId: resolvedGoogleDriveFolderId,
+      gdriveReady,
+      supabaseReady: isSupabaseEnabled,
+      warning: 'Google Drive غير مكتمل الإعداد. تم التحويل تلقائياً إلى التخزين المحلي.'
+    };
+  }
+
+  if (preferredProvider === 'supabase' && !isSupabaseEnabled) {
+    return {
+      provider: 'local',
+      settings,
+      googleDriveFolderId: resolvedGoogleDriveFolderId,
+      gdriveReady,
+      supabaseReady: false,
+      warning: 'Supabase غير مفعل. تم التحويل تلقائياً إلى التخزين المحلي.'
+    };
+  }
+
+  return {
+    provider: 'local',
+    settings,
+    googleDriveFolderId: resolvedGoogleDriveFolderId,
+    gdriveReady,
+    supabaseReady: isSupabaseEnabled,
+    warning: null
+  };
 }
 
 const DEFAULT_STORE_COORDINATES = {
@@ -671,16 +909,42 @@ function extractSupabaseStoragePath(fileUrl) {
 
 async function deleteSupabaseFileByUrl(fileUrl) {
   const storagePath = extractSupabaseStoragePath(fileUrl);
-  if (!storagePath) {
+  if (storagePath && supabase) {
+    const { error } = await supabase.storage
+      .from(SUPABASE_STORAGE_BUCKET)
+      .remove([storagePath]);
+
+    if (error) {
+      console.error('Failed to delete Supabase file:', error.message);
+    }
     return;
   }
 
-  const { error } = await supabase.storage
-    .from(SUPABASE_STORAGE_BUCKET)
-    .remove([storagePath]);
+  const driveFileId = extractGoogleDriveFileId(fileUrl);
+  if (driveFileId) {
+    const drive = getGoogleDriveClient();
+    if (!drive) {
+      return;
+    }
 
-  if (error) {
-    console.error('Failed to delete Supabase file:', error.message);
+    try {
+      await drive.files.delete({ fileId: driveFileId });
+    } catch (error) {
+      const status = Number(error?.code || error?.response?.status || 0);
+      if (status !== 404) {
+        console.error('Failed to delete Google Drive file:', error.message);
+      }
+    }
+    return;
+  }
+
+  const localPath = extractLocalUploadPath(fileUrl);
+  if (localPath && fs.existsSync(localPath)) {
+    try {
+      await fs.promises.unlink(localPath);
+    } catch (error) {
+      console.error('Failed to delete local uploaded file:', error.message);
+    }
   }
 }
 
@@ -984,8 +1248,10 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req, re
   }
 
   const fileName = buildSafeFileName(req.file.originalname);
+  let storageRuntime = null;
 
   try {
+    storageRuntime = await resolveStorageRuntimeConfig();
     let finalBuffer = req.file.buffer;
     let finalContentType = req.file.mimetype;
 
@@ -999,7 +1265,23 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req, re
       }
     }
 
-    if (isSupabaseEnabled) {
+    if (storageRuntime.provider === 'gdrive') {
+      const uploaded = await uploadFileToGoogleDrive({
+        fileName,
+        fileBuffer: finalBuffer,
+        contentType: finalContentType,
+        folderId: storageRuntime.googleDriveFolderId
+      });
+
+      return res.json({
+        url: uploaded.url,
+        storageMode: 'gdrive',
+        provider: 'gdrive',
+        warning: storageRuntime.warning || undefined
+      });
+    }
+
+    if (storageRuntime.provider === 'supabase' && isSupabaseEnabled) {
       const filePath = `uploads/${fileName}`;
       const { error: uploadError } = await supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
@@ -1016,12 +1298,36 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req, re
         .from(SUPABASE_STORAGE_BUCKET)
         .getPublicUrl(filePath);
 
-      return res.json({ url: data.publicUrl });
+      return res.json({
+        url: data.publicUrl,
+        storageMode: 'supabase',
+        provider: 'supabase',
+        warning: storageRuntime.warning || undefined
+      });
     }
 
     const localUrl = await uploadFileToLocal(req, fileName, finalBuffer);
-    return res.json({ url: localUrl });
+    return res.json({
+      url: localUrl,
+      storageMode: 'local',
+      provider: 'local',
+      warning: storageRuntime.warning || undefined
+    });
   } catch (error) {
+    if (storageRuntime?.provider === 'gdrive') {
+      try {
+        const localUrl = await uploadFileToLocal(req, fileName, req.file.buffer);
+        return res.json({
+          url: localUrl,
+          storageMode: 'local-fallback',
+          provider: 'local',
+          warning: 'فشل الرفع إلى Google Drive، تم الحفظ محلياً.'
+        });
+      } catch (localError) {
+        console.error('Local fallback upload failed after Google Drive error:', localError);
+      }
+    }
+
     if (shouldFallbackToLocalStorage(error)) {
       try {
         const localUrl = await uploadFileToLocal(req, fileName, req.file.buffer);
@@ -1043,10 +1349,21 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req, re
 app.post('/api/upload/signed-url', authenticateToken, async (req, res) => {
   const { fileName, contentType, fileSize } = req.body || {};
 
-  if (!isSupabaseEnabled) {
+  const storageRuntime = await resolveStorageRuntimeConfig();
+
+  if (storageRuntime.provider === 'gdrive') {
+    return res.status(503).json({
+      error: 'الرفع المباشر غير متاح حالياً مع Google Drive. سيتم الرفع عبر الخادم.',
+      mode: 'gdrive-server-upload',
+      provider: 'gdrive'
+    });
+  }
+
+  if (storageRuntime.provider !== 'supabase' || !isSupabaseEnabled) {
     return res.status(503).json({
       error: 'Supabase Storage غير مفعل على الخادم',
-      mode: 'local-fallback'
+      mode: 'local-fallback',
+      provider: storageRuntime.provider
     });
   }
 
@@ -1503,19 +1820,59 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
 });
 
 app.get('/api/admin/storage/health', authenticateToken, requireAdmin, async (req, res) => {
+  const storageRuntime = await resolveStorageRuntimeConfig();
   const baseStatus = {
-    provider: isSupabaseEnabled ? 'supabase' : 'local',
+    provider: storageRuntime.provider,
+    preferredProvider: normalizeStorageProvider(storageRuntime.settings?.storageProvider || STORAGE_PROVIDER || (isSupabaseEnabled ? 'supabase' : 'local')),
     bucket: SUPABASE_STORAGE_BUCKET,
-    maxUploadSizeMb: Math.round(maxUploadSizeBytes / (1024 * 1024))
+    googleDriveFolderId: storageRuntime.googleDriveFolderId || null,
+    maxUploadSizeMb: Math.round(maxUploadSizeBytes / (1024 * 1024)),
+    warning: storageRuntime.warning || null
   };
 
-  if (!isSupabaseEnabled) {
+  if (storageRuntime.provider === 'local') {
     return res.json({
       ...baseStatus,
       ok: true,
-      mode: 'local-fallback',
-      message: 'Supabase غير مفعل. الرفع المحلي يعمل حالياً.'
+      mode: storageRuntime.warning ? 'local-fallback' : 'local',
+      message: storageRuntime.warning || 'التخزين المحلي يعمل حالياً.'
     });
+  }
+
+  if (storageRuntime.provider === 'gdrive') {
+    const drive = getGoogleDriveClient();
+    if (!drive || !storageRuntime.googleDriveFolderId) {
+      return res.status(500).json({
+        ...baseStatus,
+        ok: false,
+        mode: 'gdrive',
+        message: 'Google Drive غير مكتمل الإعداد',
+        error: 'Missing credentials or folder ID'
+      });
+    }
+
+    try {
+      const folder = await drive.files.get({
+        fileId: storageRuntime.googleDriveFolderId,
+        fields: 'id,name,mimeType,trashed'
+      });
+
+      return res.json({
+        ...baseStatus,
+        ok: true,
+        mode: 'gdrive',
+        message: 'Google Drive متصل وجاهز',
+        folderName: folder?.data?.name || null
+      });
+    } catch (error) {
+      return res.status(500).json({
+        ...baseStatus,
+        ok: false,
+        mode: 'gdrive',
+        message: 'فشل التحقق من Google Drive',
+        error: error.message
+      });
+    }
   }
 
   try {
@@ -1546,6 +1903,79 @@ app.get('/api/admin/storage/health', authenticateToken, requireAdmin, async (req
       ok: false,
       mode: 'supabase',
       message: 'خطأ غير متوقع أثناء فحص Supabase Storage',
+      error: error.message
+    });
+  }
+});
+
+app.post('/api/admin/storage/test-upload', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const storageRuntime = await resolveStorageRuntimeConfig();
+    const timestamp = Date.now();
+    const testFileName = buildSafeFileName(`storage-test-${timestamp}.txt`);
+    const testBuffer = Buffer.from(`LAZEO Storage Test ${new Date(timestamp).toISOString()}`, 'utf8');
+    const testContentType = 'text/plain';
+
+    if (storageRuntime.provider === 'gdrive') {
+      const uploaded = await uploadFileToGoogleDrive({
+        fileName: testFileName,
+        fileBuffer: testBuffer,
+        contentType: testContentType,
+        folderId: storageRuntime.googleDriveFolderId
+      });
+
+      await deleteSupabaseFileByUrl(uploaded.url);
+
+      return res.json({
+        ok: true,
+        provider: 'gdrive',
+        mode: 'gdrive',
+        message: 'نجح اختبار الرفع على Google Drive وتم حذف ملف الاختبار.'
+      });
+    }
+
+    if (storageRuntime.provider === 'supabase' && isSupabaseEnabled) {
+      const filePath = `uploads/${testFileName}`;
+      const { error: uploadError } = await supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .upload(filePath, testBuffer, {
+          contentType: testContentType,
+          upsert: false
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data } = supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .getPublicUrl(filePath);
+
+      if (data?.publicUrl) {
+        await deleteSupabaseFileByUrl(data.publicUrl);
+      }
+
+      return res.json({
+        ok: true,
+        provider: 'supabase',
+        mode: 'supabase',
+        message: 'نجح اختبار الرفع على Supabase وتم حذف ملف الاختبار.'
+      });
+    }
+
+    const localUrl = await uploadFileToLocal(req, testFileName, testBuffer);
+    await deleteSupabaseFileByUrl(localUrl);
+
+    return res.json({
+      ok: true,
+      provider: 'local',
+      mode: storageRuntime.warning ? 'local-fallback' : 'local',
+      message: storageRuntime.warning || 'نجح اختبار الرفع المحلي وتم حذف ملف الاختبار.'
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      message: 'فشل اختبار الرفع على مزود التخزين الحالي.',
       error: error.message
     });
   }
@@ -2364,7 +2794,9 @@ app.put('/api/admin/settings', authenticateToken, requireAdmin, async (req, res)
     shippingMaxPrice,
     shippingCarrierThreshold,
     shippingCarrierFixedPrice,
-    shippingCarrierProvider
+    shippingCarrierProvider,
+    storageProvider,
+    googleDriveFolderId
   } = req.body;
 
   const normalizedCarrierProvider = String(shippingCarrierProvider || '').trim().toLowerCase();
@@ -2384,7 +2816,9 @@ app.put('/api/admin/settings', authenticateToken, requireAdmin, async (req, res)
     shippingMaxPrice: toOptionalNumber(shippingMaxPrice),
     shippingCarrierThreshold: toOptionalNumber(shippingCarrierThreshold),
     shippingCarrierFixedPrice: toOptionalNumber(shippingCarrierFixedPrice),
-    shippingCarrierProvider: resolvedCarrierProvider
+    shippingCarrierProvider: resolvedCarrierProvider,
+    storageProvider: normalizeStorageProvider(storageProvider || 'local'),
+    googleDriveFolderId: String(googleDriveFolderId || '').trim() || null
   };
 
   try {

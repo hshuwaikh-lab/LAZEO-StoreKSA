@@ -7,6 +7,7 @@ import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { Trash2, ShoppingCart } from 'lucide-react';
 import ActionBanner from '../components/ActionBanner';
 import LocationPickerMap from '../components/LocationPickerMap';
+import ProtectedImage from '../components/ProtectedImage';
 import { getOfferLabel } from '../utils/offers';
 import { normalizeCouponCode } from '../utils/coupons';
 import './Cart.css';
@@ -527,7 +528,12 @@ const Cart = () => {
             return (
               <div key={item.cartItemId || item.id} className="cart-item glass">
                 <div className="cart-item-info">
-                  <img src={item.image} alt={name} className="cart-item-img" />
+                  <ProtectedImage
+                    src={item.image}
+                    alt={name}
+                    className="cart-item-img"
+                    watermark={false}
+                  />
                   <div className="cart-item-details">
                     <Link to={`/product/${item.id}`} style={{textDecoration: 'none'}}>
                       <h3>{name}</h3>

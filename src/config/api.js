@@ -93,6 +93,7 @@ export const API_ENDPOINTS = {
   ADMIN_MATERIALS_DETAIL: (id) => `/api/admin/materials/${id}`,
   ADMIN_SETTINGS: '/api/admin/settings',
   ADMIN_STORAGE_HEALTH: '/api/admin/storage/health',
+  ADMIN_STORAGE_TEST_UPLOAD: '/api/admin/storage/test-upload',
   ADMIN_COUPONS: '/api/admin/coupons',
   ADMIN_COUPON_DETAIL: (id) => `/api/admin/coupons/${id}`,
 };

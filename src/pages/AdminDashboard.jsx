@@ -579,10 +579,13 @@ const AdminDashboard = () => {
     whatsappNumber: '',
     whatsappToken: '',
     snapchatUrl: '',
-    instagramUrl: ''
+    instagramUrl: '',
+    storageProvider: 'local',
+    googleDriveFolderId: ''
   });
   const [storageHealth, setStorageHealth] = useState(null);
   const [checkingStorageHealth, setCheckingStorageHealth] = useState(false);
+  const [testingStorageUpload, setTestingStorageUpload] = useState(false);
   const [storageLastCheckedAt, setStorageLastCheckedAt] = useState(null);
   useEffect(() => {
     if (data.settings) {
@@ -590,7 +593,9 @@ const AdminDashboard = () => {
         whatsappNumber: data.settings.whatsappNumber || '',
         whatsappToken: data.settings.whatsappToken || '',
         snapchatUrl: data.settings.snapchatUrl || '',
-        instagramUrl: data.settings.instagramUrl || ''
+        instagramUrl: data.settings.instagramUrl || '',
+        storageProvider: data.settings.storageProvider || 'local',
+        googleDriveFolderId: data.settings.googleDriveFolderId || ''
       });
     }
   }, [data.settings]);
@@ -715,6 +720,44 @@ const AdminDashboard = () => {
 
   const handleCheckStorageHealth = async () => {
     await fetchStorageHealth(true);
+  };
+
+  const handleTestStorageUpload = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    setTestingStorageUpload(true);
+    try {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.ADMIN_STORAGE_TEST_UPLOAD), {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setFeedback({
+          type: 'error',
+          title: 'فشل اختبار التخزين',
+          message: result.error || result.message || 'تعذر تنفيذ اختبار الرفع.'
+        });
+        return;
+      }
+
+      setFeedback({
+        type: 'success',
+        title: 'نجح اختبار التخزين',
+        message: result.message || 'تم اختبار الرفع بنجاح.'
+      });
+      await fetchStorageHealth(false);
+    } catch (error) {
+      setFeedback({
+        type: 'error',
+        title: 'فشل اختبار التخزين',
+        message: error.message || 'حدث خطأ أثناء اختبار الرفع.'
+      });
+    } finally {
+      setTestingStorageUpload(false);
+    }
   };
 
   // --- Export Excel ---
@@ -2050,6 +2093,29 @@ const AdminDashboard = () => {
                 <input type="text" placeholder="رابط الانستغرام" value={settingsForm.instagramUrl} onChange={e => setSettingsForm({...settingsForm, instagramUrl: e.target.value})} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
 
                 <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <h4 style={{ margin: 0 }}>مزود تخزين الصور والملفات</h4>
+                  <select
+                    value={settingsForm.storageProvider || 'local'}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, storageProvider: e.target.value })}
+                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff' }}
+                  >
+                    <option value="local">Local Server</option>
+                    <option value="supabase">Supabase Storage</option>
+                    <option value="gdrive">Google Drive</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Google Drive Folder ID (اختياري إذا محدد بمتغيرات البيئة)"
+                    value={settingsForm.googleDriveFolderId || ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, googleDriveFolderId: e.target.value })}
+                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                  />
+                  <span style={{ fontSize: '0.85rem', color: '#475569' }}>
+                    عند اختيار Google Drive، يجب ضبط بيانات Service Account في بيئة السيرفر.
+                  </span>
+                </div>
+
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <h4 style={{ margin: 0 }}>صفحة تعديل الشحن التقديري</h4>
                   <span style={{ color: '#475569', fontSize: '0.9rem' }}>تم نقل إعدادات الشحن التقديري إلى صفحة مستقلة لتسهيل الإدارة.</span>
                   <div>
@@ -2063,6 +2129,9 @@ const AdminDashboard = () => {
                   <button type="submit" className="btn-primary" style={{ padding: '8px 16px', width: 'fit-content' }}>حفظ الإعدادات</button>
                   <button type="button" className="btn-secondary" onClick={handleCheckStorageHealth} disabled={checkingStorageHealth} style={{ padding: '8px 16px' }}>
                     {checkingStorageHealth ? 'جاري الفحص...' : 'فحص حالة التخزين'}
+                  </button>
+                  <button type="button" className="btn-secondary" onClick={handleTestStorageUpload} disabled={testingStorageUpload} style={{ padding: '8px 16px' }}>
+                    {testingStorageUpload ? 'جاري الاختبار...' : 'اختبار رفع التخزين'}
                   </button>
                 </div>
                 {storageHealth && (
